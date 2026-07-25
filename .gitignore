@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+web/data/*.bin*
+web/data/meta.json
