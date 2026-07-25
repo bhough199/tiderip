@@ -1,7 +1,8 @@
 """Tiderip configuration: region, output grid, data sources."""
 
-# Region: Nanaimo to San Juan County incl. Saanich Inlet, Sidney, Gulf Islands.
-BBOX = dict(lon0=-124.05, lon1=-122.70, lat0=48.33, lat1=49.27)
+# Region: Nanaimo to San Juan County incl. Saanich Inlet, Sidney, Gulf Islands,
+# extended east to Bellingham Bay and south past Race Rocks.
+BBOX = dict(lon0=-124.05, lon1=-122.40, lat0=48.25, lat1=49.27)
 
 # Output grid (regular lat/lon). ~600 m cells.
 DLON = 0.008
