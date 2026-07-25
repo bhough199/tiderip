@@ -1,6 +1,6 @@
 /* Tiderip service worker: cache app shell (cache-first) and forecast data
    (network-first, falling back to last cached copy when offline). */
-const SHELL = 'tiderip-shell-v9';
+const SHELL = 'tiderip-shell-v10';
 const DATA = 'tiderip-data-v1';
 const SHELL_FILES = [
   './', 'index.html', 'app.js', 'manifest.webmanifest',
@@ -9,7 +9,10 @@ const SHELL_FILES = [
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(SHELL).then(c => c.addAll(SHELL_FILES)).then(() => self.skipWaiting()));
+  // cache:'reload' bypasses the HTTP cache so a new SW never caches stale shell files
+  e.waitUntil(caches.open(SHELL).then(c =>
+    c.addAll(SHELL_FILES.map(f => new Request(f, {cache: 'reload'})))
+  ).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(
