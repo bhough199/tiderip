@@ -8,6 +8,7 @@ const state = {
   minWind: +(localStorage.getItem('tr_minWind') || 8),
   minCur: +(localStorage.getItem('tr_minCur') || 1.0),
   cone: +(localStorage.getItem('tr_cone') || 60),
+  arrows: localStorage.getItem('tr_arrows') || 'wind',   // 'wind' | 'current' | 'off'
 };
 let META = null, DATA = null;   // DATA: {mask:Uint8Array, hours:[{ws,wd,cu,cv}]}
 let mapL, heatOverlay, arrowLayer, popup;
@@ -92,12 +93,12 @@ function rampColor(s) {
   const stops = [[242, 206, 78], [239, 154, 46], [222, 90, 30], [183, 30, 18]];
   const x = n * 3, i = Math.min(2, Math.floor(x)), f = x - i;
   const c = stops[i].map((v, k) => Math.round(v + (stops[i + 1][k] - v) * f));
-  return [c[0], c[1], c[2], Math.round(255 * (0.30 + 0.55 * n))];
+  return [c[0], c[1], c[2], Math.round(255 * (0.55 + 0.38 * n))];
 }
 function subColor(raw) {
   const lo = Math.max(1, state.minWind * state.minCur);
   const n = Math.max(0, Math.min(1, raw / lo));
-  return [70, 120, 130, Math.round(255 * (0.05 + 0.20 * n))];
+  return [30, 102, 116, Math.round(255 * (0.20 + 0.30 * n))];
 }
 
 /* ---------------- heat overlay (Mercator-correct image) ---------------- */
@@ -170,6 +171,8 @@ const ArrowLayer = L.Layer.extend({
     const ctx = this._canvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, size.x, size.y);
+    if (state.arrows === 'off') return;
+    const isWind = state.arrows === 'wind';
     const SP = 76;
     for (let x = SP / 2; x < size.x; x += SP) {
       for (let y = SP / 2; y < size.y; y += SP) {
@@ -177,17 +180,28 @@ const ArrowLayer = L.Layer.extend({
         const i = cellIdx(ll.lat, ll.lng);
         if (i < 0) continue;
         const r = sampleRaw(i, state.t);
-        const toRad = (90 - (r.wfrom + 180)) * Math.PI / 180;
-        const len = Math.min(30, 8 + r.wkt * 1.15);
+        let toDeg, kt;
+        if (isWind) { toDeg = r.wfrom + 180; kt = r.wkt; }
+        else {
+          if (DATA.mask[i] !== 1 || r.ckt < 0.1) continue;   // current: water only
+          toDeg = r.cdir; kt = r.ckt;
+        }
+        const toRad = (90 - toDeg) * Math.PI / 180;
+        const len = isWind ? Math.min(30, 8 + kt * 1.15) : Math.min(30, 7 + kt * 4.5);
         const dx = Math.cos(toRad), dy = -Math.sin(toRad);
         const x0 = x - dx * len / 2, y0 = y - dy * len / 2, x1 = x + dx * len / 2, y1 = y + dy * len / 2;
-        ctx.strokeStyle = `rgba(22,50,62,${0.35 + Math.min(0.4, r.wkt / 45)})`;
-        ctx.lineWidth = 1 + Math.min(1.6, r.wkt / 14);
+        if (isWind) {
+          ctx.strokeStyle = `rgba(22,50,62,${0.35 + Math.min(0.4, kt / 45)})`;
+          ctx.lineWidth = 1 + Math.min(1.6, kt / 14);
+        } else {
+          ctx.strokeStyle = `rgba(14,110,140,${0.5 + Math.min(0.4, kt / 7)})`;
+          ctx.lineWidth = 1.2 + Math.min(1.8, kt / 3);
+        }
         ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
-        const hA = toRad + 2.6, hB = toRad - 2.6, hl = 4.5 + r.wkt / 8;
+        const hA = toRad + 2.6, hB = toRad - 2.6, hl = isWind ? 4.5 + kt / 8 : 4 + kt;
         ctx.beginPath();
-        ctx.moveTo(x1, y1); ctx.lineTo(x1 + Math.cos(hA) * hl, y1 - Math.sin(hA) * hl);
-        ctx.moveTo(x1, y1); ctx.lineTo(x1 + Math.cos(hB) * hl, y1 - Math.sin(hB) * hl);
+        ctx.moveTo(x1, y1); ctx.lineTo(x1 + Math.cos(hA) * Math.min(hl, 9), y1 - Math.sin(hA) * Math.min(hl, 9));
+        ctx.moveTo(x1, y1); ctx.lineTo(x1 + Math.cos(hB) * Math.min(hl, 9), y1 - Math.sin(hB) * Math.min(hl, 9));
         ctx.stroke();
       }
     }
@@ -269,10 +283,20 @@ function drawRip() {
   }
   rctx.fillStyle = '#B01E6E';
   rctx.fillRect(state.t * seg, 0, 2.5, hgt);
+  // date labels at day boundaries (and at the start)
+  rctx.font = '9px ui-monospace, Menlo, monospace';
+  for (let h = 0; h < H; h++) {
+    const d = new Date(META.hours[h]);
+    if (h === 0 || d.getHours() === 0) {
+      if (h > 0) { rctx.fillStyle = 'rgba(22,50,62,.5)'; rctx.fillRect(h * seg, 0, 1, hgt); }
+      rctx.fillStyle = 'rgba(22,50,62,.85)';
+      rctx.fillText(d.toLocaleDateString([], {weekday: 'short', day: 'numeric'}), h * seg + 4, 10);
+    }
+  }
 }
 
 /* ---------------- readouts ---------------- */
-const fmtHour = iso => new Date(iso).toLocaleString([], {weekday: 'short', hour: 'numeric', minute: '2-digit'});
+const fmtHour = iso => new Date(iso).toLocaleString([], {weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
 function updateReadouts() {
   document.getElementById('timeLabel').innerHTML =
     `<b class="mono">${fmtHour(META.hours[state.t])}</b> <span class="mono" style="color:var(--ink-soft)">(T+${state.t}h)</span>`;
@@ -326,6 +350,16 @@ async function init() {
   seamarks.addTo(mapL);
   L.control.layers(null, {'Seamarks (OpenSeaMap)': seamarks}, {position: 'bottomright'}).addTo(mapL);
   arrowLayer = new ArrowLayer(); mapL.addLayer(arrowLayer);
+
+  // data-region outline + fade everything outside it
+  const b0 = [g.lat0 - g.dlat / 2, g.lon0 - g.dlon / 2];
+  const b1 = [g.lat0 + g.dlat * (g.ny - 0.5), g.lon0 + g.dlon * (g.nx - 0.5)];
+  L.polygon([
+    [[-85, -360], [85, -360], [85, 360], [-85, 360]],                 // world
+    [[b0[0], b0[1]], [b0[0], b1[1]], [b1[0], b1[1]], [b1[0], b0[1]]], // hole = our region
+  ], {stroke: false, fillColor: '#16323E', fillOpacity: 0.28, interactive: false}).addTo(mapL);
+  L.rectangle([b0, b1], {color: '#B01E6E', weight: 1.5, dashArray: '6 4', fill: false, interactive: false}).addTo(mapL);
+
   mapL.on('click', e => openInspect(e.latlng.lat, e.latlng.lng));
   mapL.on('popupclose', () => { if (state.inspect) closeInspect(); });
 
@@ -354,6 +388,17 @@ async function init() {
     document.getElementById('panelChev').textContent = p.classList.contains('collapsed') ? '▸' : '▾';
   });
   document.getElementById('ripReset').addEventListener('click', closeInspect);
+
+  // arrow overlay mode: wind / current / off
+  const arrowBtns = document.querySelectorAll('#arrowCtl button');
+  const setArrowMode = mode => {
+    state.arrows = mode;
+    localStorage.setItem('tr_arrows', mode);
+    arrowBtns.forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+    arrowLayer.refresh();
+  };
+  arrowBtns.forEach(b => b.addEventListener('click', () => setArrowMode(b.dataset.mode)));
+  setArrowMode(state.arrows);
 
   const ripWrap = document.getElementById('ripbarWrap');
   const scrub = e => {
