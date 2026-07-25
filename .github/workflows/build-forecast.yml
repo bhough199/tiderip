@@ -37,8 +37,7 @@ jobs:
         run: pip install -r pipeline/requirements.txt
 
       - name: Build forecast payload
-        working-directory: pipeline
-        run: python build_forecast.py
+        run: python pipeline/build_forecast.py
 
       - name: Assemble site
         run: |
