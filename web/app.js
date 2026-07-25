@@ -146,7 +146,7 @@ function renderHeat(h) {
     for (let ix = 0; ix < g.nx; ix++) {
       const o = rowOff + ix * 4;
       if (coastMask[base + ix]) {           // model coastline: crisp dark edge
-        px[o] = 38; px[o + 1] = 58; px[o + 2] = 68; px[o + 3] = 165;
+        px[o] = 38; px[o + 1] = 58; px[o + 2] = 68; px[o + 3] = 95;
         continue;
       }
       const s = scoreCell(base + ix, h);
@@ -250,14 +250,14 @@ function openInspect(lat, lon) {
   state.inspect = {lat, lon};
   popup = L.popup({maxWidth: 240, autoPan: true, closeOnClick: false})
     .setLatLng([lat, lon]).setContent(popupHtml(lat, lon)).openOn(mapL);
-  document.getElementById('ripMode').textContent = `rip bar: ${lat.toFixed(3)}, ${lon.toFixed(3)}`;
+  document.getElementById('ripMode').textContent = `@ ${lat.toFixed(3)}, ${lon.toFixed(3)}`;
   document.getElementById('ripReset').style.display = 'inline-block';
   drawRip();
 }
 function closeInspect() {
   state.inspect = null;
   if (popup) mapL.closePopup(popup);
-  document.getElementById('ripMode').textContent = 'rip bar: region worst';
+  document.getElementById('ripMode').textContent = 'region worst';
   document.getElementById('ripReset').style.display = 'none';
   drawRip();
 }
@@ -359,8 +359,9 @@ async function init() {
   mapL = L.map('leafmap', {zoomSnap: 0.5, minZoom: 8, maxZoom: 14})
     .fitBounds([[g.lat0, g.lon0], [g.lat0 + g.dlat * g.ny, g.lon0 + g.dlon * g.nx]]);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap · seamarks © OpenSeaMap · currents: SalishSeaCast (UBC) · wind: ECCC HRDPS',
+    attribution: '© OpenStreetMap · OpenSeaMap',
   }).addTo(mapL);
+  mapL.attributionControl.setPrefix(false);
   // OpenSeaMap seamark overlay: buoys, beacons, lights. Crowd-sourced —
   // orientation aid only, not a navigation chart.
   const seamarks = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png',
@@ -403,7 +404,8 @@ async function init() {
   document.getElementById('panelHead').addEventListener('click', () => {
     const p = document.getElementById('panel');
     p.classList.toggle('collapsed');
-    document.getElementById('panelChev').textContent = p.classList.contains('collapsed') ? '▸' : '▾';
+    document.getElementById('panelHead').textContent =
+      p.classList.contains('collapsed') ? '⚙' : '⚙ Settings';
   });
   document.getElementById('ripReset').addEventListener('click', closeInspect);
 

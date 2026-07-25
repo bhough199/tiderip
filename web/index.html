@@ -28,14 +28,17 @@
 
   header{
     background:var(--panel); border-bottom:2px solid var(--ink);
-    padding:8px 14px calc(8px); display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;
+    padding:7px 12px; display:flex; align-items:baseline; gap:10px; flex-wrap:nowrap;
   }
   header h1{
     font-family: Georgia, "Times New Roman", serif;
     font-size:19px; letter-spacing:.14em; font-variant:small-caps; font-weight:600;
   }
-  header .sub{font-size:12px; color:var(--ink-soft)}
-  header .gen{margin-left:auto; font-size:11.5px; color:var(--ink-soft)}
+  header .sub{
+    font-size:12px; color:var(--ink-soft); flex:1; min-width:0;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  header .gen{margin-left:auto; font-size:11.5px; color:var(--ink-soft); white-space:nowrap}
   #staleBanner{
     display:none; background:var(--warn3); color:#fff; font-size:12px;
     padding:5px 14px; font-weight:600;
@@ -67,22 +70,46 @@
   #arrowCtl button.active[data-mode="off"]{background:var(--ink-soft); color:#fff}
 
   #panel{
-    position:absolute; top:10px; right:10px; width:252px; z-index:1000;
+    position:absolute; top:10px; right:10px; z-index:1000;
+    font-size:12.5px;
+  }
+  #panel:not(.collapsed){
+    width:min(260px, calc(100vw - 20px));
     background:var(--panel); border:1.5px solid var(--ink); border-radius:4px;
-    box-shadow:2px 2px 0 rgba(22,50,62,.25); font-size:12.5px; overflow:hidden;
+    box-shadow:2px 2px 0 rgba(22,50,62,.25); overflow:hidden;
   }
   #panelHead{
-    display:flex; align-items:center; justify-content:space-between;
-    padding:8px 12px; cursor:pointer; user-select:none; font-weight:600;
+    display:block; width:38px; height:38px; border:1.5px solid var(--ink);
+    border-radius:4px; background:var(--panel); font-size:19px; line-height:1;
+    cursor:pointer; box-shadow:2px 2px 0 rgba(22,50,62,.25); padding:0;
+  }
+  #panel:not(.collapsed) #panelHead{
+    width:100%; height:auto; border:none; border-radius:0; box-shadow:none;
+    text-align:left; padding:8px 12px; font-size:15px;
   }
   #panelHead:hover{background:var(--land)}
-  #panelBody{max-height:56vh; overflow:auto; border-top:1px solid var(--panel-edge)}
+  #panelBody{max-height:62vh; overflow:auto; border-top:1px solid var(--panel-edge)}
   #panel.collapsed #panelBody{display:none}
   #panelBody section{padding:10px 12px; border-bottom:1px solid var(--panel-edge)}
   #panelBody section:last-child{border-bottom:none}
   #panelBody h2{
     font-size:11px; letter-spacing:.12em; text-transform:uppercase;
     color:var(--ink-soft); margin-bottom:7px; font-weight:600;
+  }
+  #arrowCtl{display:flex; gap:5px}
+  #arrowCtl button{
+    flex:1; border:1.5px solid var(--ink); background:var(--panel); color:var(--ink);
+    border-radius:3px; padding:5px 0; font-size:11.5px; cursor:pointer; font-weight:600;
+  }
+  #arrowCtl button:hover{background:var(--land)}
+  #arrowCtl button.active[data-mode="wind"]{background:#16323E; color:#fff}
+  #arrowCtl button.active[data-mode="current"]{background:#0E6E8C; color:#fff}
+  #arrowCtl button.active[data-mode="off"]{background:var(--ink-soft); color:#fff}
+
+  /* compact map attribution */
+  .leaflet-control-attribution{
+    font-size:8.5px; line-height:1.4; opacity:.8; background:rgba(251,249,243,.75);
+    max-width:70vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
   .row{display:flex; align-items:center; justify-content:space-between; gap:8px; margin:5px 0}
   .row label{flex:1}
@@ -115,30 +142,35 @@
   .pop-flag.sub{background:#D8E2E4; color:#33555E}
   .pop-flag.ok{background:#DCE8DC; color:#2F5C39}
 
-  #dock{background:var(--panel); border-top:2px solid var(--ink); padding:8px 14px calc(10px + env(safe-area-inset-bottom)); user-select:none}
-  #dock .dock-top{display:flex; align-items:center; gap:10px; margin-bottom:6px; flex-wrap:wrap}
-  #playBtn{width:34px; height:30px; border:1.5px solid var(--ink); border-radius:4px; background:var(--panel); font-size:13px; cursor:pointer}
+  #dock{background:var(--panel); border-top:2px solid var(--ink); padding:6px 12px calc(8px + env(safe-area-inset-bottom)); user-select:none}
+  #dock .dock-top{display:flex; align-items:center; gap:8px; margin-bottom:5px; flex-wrap:wrap}
+  #playBtn{width:32px; height:28px; border:1.5px solid var(--ink); border-radius:4px; background:var(--panel); font-size:12px; cursor:pointer}
   #playBtn:hover{background:var(--land)}
-  #timeLabel{font-size:13px}
+  #timeLabel{font-size:12.5px}
   #timeLabel b{color:var(--accent)}
-  #ripMode{margin-left:auto; font-size:11.5px; color:var(--ink-soft)}
-  #ripReset{display:none; border:1.5px solid var(--ink); background:var(--panel); border-radius:4px; padding:3px 8px; font-size:11px; cursor:pointer}
-  #ripbarWrap{position:relative; height:44px; cursor:pointer; touch-action:none}
+  #ripMode{margin-left:auto; font-size:10.5px; color:var(--ink-soft)}
+  #ripReset{display:none; border:1.5px solid var(--ink); background:var(--panel); border-radius:4px; padding:2px 7px; font-size:11px; cursor:pointer}
+  #ripbarWrap{position:relative; height:34px; cursor:pointer; touch-action:none}
   #ripbar{width:100%; height:100%; display:block; border:1.5px solid var(--ink); border-radius:3px; background:#EFEAD9}
-  .ripbar-caption{font-size:10.5px; color:var(--ink-soft); margin-top:3px; display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap}
 
   #loading{
     position:absolute; inset:0; z-index:2000; display:flex; align-items:center; justify-content:center;
     background:var(--water); font-size:14px; color:var(--ink-soft); text-align:center; padding:20px;
   }
-  @media (max-width:700px){ #panel{width:212px} }
+  @media (max-width:480px){
+    header{padding:6px 10px}
+    header h1{font-size:16px; letter-spacing:.1em}
+    header .sub{font-size:10.5px}
+    header .gen{font-size:10px}
+    #dock{padding-top:6px}
+  }
 </style>
 </head>
 <body>
 
 <header>
   <h1>Tiderip</h1>
-  <span class="sub">wind against current · Salish Sea</span>
+  <span class="sub">wind against current</span>
   <span class="gen mono" id="genLabel"></span>
 </header>
 <div id="staleBanner"></div>
@@ -147,16 +179,17 @@
   <div id="leafmap"></div>
   <div id="loading">Loading forecast…</div>
 
-  <div id="arrowCtl" title="Arrow overlay">
-    <span class="lbl">Arrows</span>
-    <button data-mode="wind">Wind</button>
-    <button data-mode="current">Current</button>
-    <button data-mode="off">Off</button>
-  </div>
-
   <div id="panel" class="collapsed">
-    <div id="panelHead"><span>⚙ Thresholds · legend · worst spots</span><span id="panelChev">▸</span></div>
+    <button id="panelHead" title="Settings">⚙</button>
     <div id="panelBody">
+      <section>
+        <h2>Arrows</h2>
+        <div id="arrowCtl">
+          <button data-mode="wind">Wind</button>
+          <button data-mode="current">Current</button>
+          <button data-mode="off">Off</button>
+        </div>
+      </section>
       <section>
         <h2>Your thresholds</h2>
         <div class="row"><label>Min wind</label><input id="minWind" type="range" min="4" max="20" step="1" value="8"><output id="minWindOut" class="mono">8 kt</output></div>
@@ -174,6 +207,14 @@
         <div id="hotspots"></div>
       </section>
       <section>
+        <h2>How to inspect</h2>
+        <div style="font-size:11.5px; color:var(--ink-soft); line-height:1.4">
+          Tap any point on the water to see the wind, current, and opposition
+          score there. The rip bar switches to that spot's forecast until you
+          tap ✕ next to it.
+        </div>
+      </section>
+      <section>
         <h2>Data</h2>
         <div id="sources"></div>
       </section>
@@ -185,11 +226,10 @@
   <div class="dock-top">
     <button id="playBtn" title="Play / pause">▶</button>
     <span id="timeLabel"></span>
-    <span id="ripMode" class="mono">rip bar: region worst</span>
-    <button id="ripReset">✕ back to region</button>
+    <span id="ripMode" class="mono">region worst</span>
+    <button id="ripReset" title="Back to region view">✕</button>
   </div>
   <div id="ripbarWrap"><canvas id="ripbar"></canvas></div>
-  <div class="ripbar-caption"><span>bar = worst opposition (region, or tapped point) · shaded = night</span><span class="mono">tap water to inspect</span></div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
