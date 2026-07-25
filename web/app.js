@@ -103,8 +103,21 @@ function subColor(raw) {
 
 /* ---------------- heat overlay (Mercator-correct image) ---------------- */
 const HEAT_ROWS = 640;
-let heatCanvas, rowMap;
+let heatCanvas, rowMap, coastMask;
 function mercY(lat) { const r = lat * Math.PI / 180; return Math.log(Math.tan(Math.PI / 4 + r / 2)); }
+function buildCoastMask() {
+  const g = META.grid, m = DATA.mask;
+  coastMask = new Uint8Array(g.nx * g.ny);
+  for (let iy = 0; iy < g.ny; iy++) {
+    for (let ix = 0; ix < g.nx; ix++) {
+      const i = iy * g.nx + ix;
+      if (m[i] !== 1) continue;
+      if ((ix > 0 && m[i - 1] !== 1) || (ix < g.nx - 1 && m[i + 1] !== 1) ||
+          (iy > 0 && m[i - g.nx] !== 1) || (iy < g.ny - 1 && m[i + g.nx] !== 1))
+        coastMask[i] = 1;
+    }
+  }
+}
 function buildRowMap() {
   const g = META.grid;
   const latTop = g.lat0 + g.dlat * (g.ny - 1), latBot = g.lat0;
@@ -123,6 +136,7 @@ function renderHeat(h) {
     heatCanvas = document.createElement('canvas');
     heatCanvas.width = g.nx; heatCanvas.height = HEAT_ROWS;
     buildRowMap();
+    buildCoastMask();
   }
   const ctx = heatCanvas.getContext('2d');
   const img = ctx.createImageData(g.nx, HEAT_ROWS);
@@ -130,10 +144,14 @@ function renderHeat(h) {
   for (let r = 0; r < HEAT_ROWS; r++) {
     const iy = rowMap[r], base = iy * g.nx, rowOff = r * g.nx * 4;
     for (let ix = 0; ix < g.nx; ix++) {
+      const o = rowOff + ix * 4;
+      if (coastMask[base + ix]) {           // model coastline: crisp dark edge
+        px[o] = 38; px[o + 1] = 58; px[o + 2] = 68; px[o + 3] = 165;
+        continue;
+      }
       const s = scoreCell(base + ix, h);
       if (s === 0x7fffffff || s === 0) continue;
       const c = s > 0 ? rampColor(s) : subColor(-s);
-      const o = rowOff + ix * 4;
       px[o] = c[0]; px[o + 1] = c[1]; px[o + 2] = c[2]; px[o + 3] = c[3];
     }
   }

@@ -44,8 +44,8 @@
   #stage{position:relative; flex:1; min-height:0}
   #leafmap{position:absolute; inset:0}
   .leaflet-container{background:var(--water); font:inherit}
-  /* Mute the basemap so any score shading reads unambiguously */
-  .leaflet-tile-pane{filter:saturate(.30) brightness(1.05)}
+  /* Mute the basemap so score shading reads clearly, but keep land/water contrast */
+  .leaflet-tile-pane{filter:saturate(.45) contrast(1.22) brightness(1.02)}
 
   #arrowCtl{
     position:absolute; top:88px; left:10px; z-index:1000;
