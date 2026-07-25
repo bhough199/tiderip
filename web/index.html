@@ -50,25 +50,6 @@
   /* Mute the basemap so score shading reads clearly, but keep land/water contrast */
   .leaflet-tile-pane{filter:saturate(.45) contrast(1.22) brightness(1.02)}
 
-  #arrowCtl{
-    position:absolute; top:88px; left:10px; z-index:1000;
-    background:var(--panel); border:1.5px solid var(--ink); border-radius:4px;
-    box-shadow:2px 2px 0 rgba(22,50,62,.25); padding:4px; display:flex; gap:3px;
-    align-items:center; font-size:11.5px;
-  }
-  #arrowCtl .lbl{
-    padding:0 6px 0 4px; font-size:10px; letter-spacing:.1em; text-transform:uppercase;
-    color:var(--ink-soft); font-weight:600;
-  }
-  #arrowCtl button{
-    border:1.5px solid var(--ink); background:var(--panel); color:var(--ink);
-    border-radius:3px; padding:4px 9px; font-size:11.5px; cursor:pointer; font-weight:600;
-  }
-  #arrowCtl button:hover{background:var(--land)}
-  #arrowCtl button.active[data-mode="wind"]{background:#16323E; color:#fff}
-  #arrowCtl button.active[data-mode="current"]{background:#0E6E8C; color:#fff}
-  #arrowCtl button.active[data-mode="off"]{background:var(--ink-soft); color:#fff}
-
   #panel{
     position:absolute; top:10px; right:10px; z-index:1000;
     font-size:12.5px;
