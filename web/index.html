@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tiderip — wind against current, Salish Sea</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#FBF9F3">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+  :root{
+    --water:#C9DFE8; --land:#EADFC2;
+    --ink:#16323E; --ink-soft:#4A6472;
+    --panel:#FBF9F3; --panel-edge:#D9D2BE;
+    --accent:#B01E6E;
+    --warn2:#EF9A2E; --warn3:#DE5A1E; --warn4:#B71E12;
+    --night:rgba(22,50,62,.18);
+  }
+  *{box-sizing:border-box; margin:0}
+  html,body{height:100%}
+  body{
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    color:var(--ink); background:var(--water);
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  .mono{font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace}
+
+  header{
+    background:var(--panel); border-bottom:2px solid var(--ink);
+    padding:8px 14px calc(8px); display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;
+  }
+  header h1{
+    font-family: Georgia, "Times New Roman", serif;
+    font-size:19px; letter-spacing:.14em; font-variant:small-caps; font-weight:600;
+  }
+  header .sub{font-size:12px; color:var(--ink-soft)}
+  header .gen{margin-left:auto; font-size:11.5px; color:var(--ink-soft)}
+  #staleBanner{
+    display:none; background:var(--warn3); color:#fff; font-size:12px;
+    padding:5px 14px; font-weight:600;
+  }
+
+  #stage{position:relative; flex:1; min-height:0}
+  #leafmap{position:absolute; inset:0}
+  .leaflet-container{background:var(--water); font:inherit}
+
+  #panel{
+    position:absolute; top:10px; right:10px; width:252px; z-index:1000;
+    background:var(--panel); border:1.5px solid var(--ink); border-radius:4px;
+    box-shadow:2px 2px 0 rgba(22,50,62,.25); font-size:12.5px; overflow:hidden;
+  }
+  #panelHead{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:8px 12px; cursor:pointer; user-select:none; font-weight:600;
+  }
+  #panelHead:hover{background:var(--land)}
+  #panelBody{max-height:56vh; overflow:auto; border-top:1px solid var(--panel-edge)}
+  #panel.collapsed #panelBody{display:none}
+  #panelBody section{padding:10px 12px; border-bottom:1px solid var(--panel-edge)}
+  #panelBody section:last-child{border-bottom:none}
+  #panelBody h2{
+    font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--ink-soft); margin-bottom:7px; font-weight:600;
+  }
+  .row{display:flex; align-items:center; justify-content:space-between; gap:8px; margin:5px 0}
+  .row label{flex:1}
+  .row output{width:58px; text-align:right; font-weight:600}
+  input[type=range]{flex:2; accent-color:var(--accent); min-width:70px}
+  .legend-bar{
+    height:12px; border:1px solid var(--ink); border-radius:2px;
+    background:linear-gradient(90deg, rgba(242,206,78,.15), #F2CE4E 25%, var(--warn2) 50%, var(--warn3) 75%, var(--warn4));
+  }
+  .legend-ticks{display:flex; justify-content:space-between; font-size:10.5px; color:var(--ink-soft); margin-top:2px}
+  .legend-note{font-size:11px; color:var(--ink-soft); margin-top:6px; line-height:1.35}
+  #hotspots div{display:flex; justify-content:space-between; padding:3px 0; gap:8px; border-bottom:1px dashed var(--panel-edge)}
+  #hotspots div:last-child{border-bottom:none}
+  #hotspots .score{font-weight:700}
+  #hotspots .calm{color:var(--ink-soft)}
+  #sources{font-size:10.5px; color:var(--ink-soft); line-height:1.4}
+
+  /* Leaflet popup restyle */
+  .leaflet-popup-content-wrapper{
+    background:var(--panel); color:var(--ink); border:1.5px solid var(--ink);
+    border-radius:4px; box-shadow:2px 2px 0 rgba(22,50,62,.3);
+  }
+  .leaflet-popup-tip{background:var(--panel); border:1px solid var(--ink)}
+  .leaflet-popup-content{margin:10px 12px; font-size:12px; line-height:1.35}
+  .pop-table{width:100%; border-collapse:collapse}
+  .pop-table td{padding:2.5px 0}
+  .pop-table td:last-child{text-align:right; font-weight:600}
+  .pop-flag{margin-top:6px; padding:4px 8px; border-radius:3px; font-weight:700; text-align:center; font-size:11.5px}
+  .pop-flag.bad{background:var(--warn3); color:#fff}
+  .pop-flag.sub{background:#D8E2E4; color:#33555E}
+  .pop-flag.ok{background:#DCE8DC; color:#2F5C39}
+
+  #dock{background:var(--panel); border-top:2px solid var(--ink); padding:8px 14px calc(10px + env(safe-area-inset-bottom)); user-select:none}
+  #dock .dock-top{display:flex; align-items:center; gap:10px; margin-bottom:6px; flex-wrap:wrap}
+  #playBtn{width:34px; height:30px; border:1.5px solid var(--ink); border-radius:4px; background:var(--panel); font-size:13px; cursor:pointer}
+  #playBtn:hover{background:var(--land)}
+  #timeLabel{font-size:13px}
+  #timeLabel b{color:var(--accent)}
+  #ripMode{margin-left:auto; font-size:11.5px; color:var(--ink-soft)}
+  #ripReset{display:none; border:1.5px solid var(--ink); background:var(--panel); border-radius:4px; padding:3px 8px; font-size:11px; cursor:pointer}
+  #ripbarWrap{position:relative; height:44px; cursor:pointer; touch-action:none}
+  #ripbar{width:100%; height:100%; display:block; border:1.5px solid var(--ink); border-radius:3px; background:#EFEAD9}
+  .ripbar-caption{font-size:10.5px; color:var(--ink-soft); margin-top:3px; display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap}
+
+  #loading{
+    position:absolute; inset:0; z-index:2000; display:flex; align-items:center; justify-content:center;
+    background:var(--water); font-size:14px; color:var(--ink-soft); text-align:center; padding:20px;
+  }
+  @media (max-width:700px){ #panel{width:212px} }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Tiderip</h1>
+  <span class="sub">wind against current · Salish Sea</span>
+  <span class="gen mono" id="genLabel"></span>
+</header>
+<div id="staleBanner"></div>
+
+<div id="stage">
+  <div id="leafmap"></div>
+  <div id="loading">Loading forecast…</div>
+
+  <div id="panel" class="collapsed">
+    <div id="panelHead"><span>⚙ Thresholds · legend · worst spots</span><span id="panelChev">▸</span></div>
+    <div id="panelBody">
+      <section>
+        <h2>Your thresholds</h2>
+        <div class="row"><label>Min wind</label><input id="minWind" type="range" min="4" max="20" step="1" value="8"><output id="minWindOut" class="mono">8 kt</output></div>
+        <div class="row"><label>Min current</label><input id="minCur" type="range" min="0.4" max="3" step="0.1" value="1.0"><output id="minCurOut" class="mono">1.0 kt</output></div>
+        <div class="row"><label>Opposition cone</label><input id="cone" type="range" min="20" max="90" step="5" value="60"><output id="coneOut" class="mono">±60°</output></div>
+      </section>
+      <section>
+        <h2>Opposition score</h2>
+        <div class="legend-bar"></div>
+        <div class="legend-ticks mono"><span id="lgMin">8</span><span>·</span><span id="lgMid">19</span><span>·</span><span id="lgMax">30+</span></div>
+        <div class="legend-note">Score = wind (kt) × current (kt) × alignment. Warm: your thresholds met. Faint grey-teal: opposed but below thresholds.</div>
+      </section>
+      <section>
+        <h2>Worst spots this hour</h2>
+        <div id="hotspots"></div>
+      </section>
+      <section>
+        <h2>Data</h2>
+        <div id="sources"></div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div id="dock">
+  <div class="dock-top">
+    <button id="playBtn" title="Play / pause">▶</button>
+    <span id="timeLabel"></span>
+    <span id="ripMode" class="mono">rip bar: region worst</span>
+    <button id="ripReset">✕ back to region</button>
+  </div>
+  <div id="ripbarWrap"><canvas id="ripbar"></canvas></div>
+  <div class="ripbar-caption"><span>bar = worst opposition (region, or tapped point) · shaded = night</span><span class="mono">tap water to inspect</span></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="app.js"></script>
+</body>
+</html>

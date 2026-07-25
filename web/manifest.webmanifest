@@ -1,0 +1,10 @@
+{
+  "name": "Tiderip",
+  "short_name": "Tiderip",
+  "description": "Wind-against-current forecast for the Salish Sea",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#C9DFE8",
+  "theme_color": "#FBF9F3",
+  "icons": []
+}
