@@ -5,7 +5,7 @@
 /* ---------------- state & persisted thresholds ---------------- */
 const state = {
   t: 0, playing: false, inspect: null,
-  minWind: +(localStorage.getItem('tr_minWind') || 8),
+  minWind: +(localStorage.getItem('tr_minWind') || 4),
   minCur: +(localStorage.getItem('tr_minCur') || 1.0),
   cone: +(localStorage.getItem('tr_cone') || 60),
   arrows: localStorage.getItem('tr_arrows') || 'wind',   // 'wind' | 'current' | 'off'
