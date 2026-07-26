@@ -47,8 +47,8 @@
   #stage{position:relative; flex:1; min-height:0}
   #leafmap{position:absolute; inset:0}
   .leaflet-container{background:var(--water); font:inherit}
-  /* Mute the basemap so score shading reads clearly, but keep land/water contrast */
-  .leaflet-tile-pane{filter:saturate(.45) contrast(1.22) brightness(1.02)}
+  /* Mute only the busy OSM basemap (Positron needs no filter) */
+  .mute-tiles .leaflet-tile-pane{filter:saturate(.45) contrast(1.22) brightness(1.02)}
 
   #panel{
     position:absolute; top:10px; right:10px; z-index:1000;
@@ -85,6 +85,7 @@
   #arrowCtl button:hover{background:var(--land)}
   #arrowCtl button.active[data-mode="wind"]{background:#16323E; color:#fff}
   #arrowCtl button.active[data-mode="current"]{background:#0E6E8C; color:#fff}
+  #arrowCtl button.active[data-mode="both"]{background:linear-gradient(105deg,#16323E 48%,#0E6E8C 52%); color:#fff}
   #arrowCtl button.active[data-mode="off"]{background:var(--ink-soft); color:#fff}
 
   /* compact map attribution */
@@ -168,6 +169,7 @@
         <div id="arrowCtl">
           <button data-mode="wind">Wind</button>
           <button data-mode="current">Current</button>
+          <button data-mode="both">Both</button>
           <button data-mode="off">Off</button>
         </div>
       </section>

@@ -1,6 +1,6 @@
 /* Tiderip service worker: cache app shell (cache-first) and forecast data
    (network-first, falling back to last cached copy when offline). */
-const SHELL = 'tiderip-shell-v11';
+const SHELL = 'tiderip-shell-v12';
 const DATA = 'tiderip-data-v1';
 const SHELL_FILES = [
   './', 'index.html', 'app.js', 'manifest.webmanifest',
@@ -32,7 +32,7 @@ self.addEventListener('fetch', e => {
         return r;
       }).catch(() => caches.match(e.request))
     );
-  } else if (url.hostname.includes('tile.openstreetmap.org') || url.hostname.includes('tiles.openseamap.org')) {
+  } else if (url.hostname.includes('tile.openstreetmap.org') || url.hostname.includes('tiles.openseamap.org') || url.hostname.includes('basemaps.cartocdn.com')) {
     // cache-then-network for map tiles so the last-viewed area works offline
     e.respondWith(
       caches.open(DATA).then(async c => {

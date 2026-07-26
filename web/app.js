@@ -101,39 +101,72 @@ function subColor(raw) {
   return [30, 102, 116, Math.round(255 * (0.20 + 0.30 * n))];
 }
 
-/* ---------------- heat overlay (Mercator-correct image) ---------------- */
-const HEAT_ROWS = 640;
-let heatCanvas, rowMap;
+/* ---------------- heat overlay (Mercator-correct, supersampled + bilinear) ---------------- */
+const HEAT_ROWS = 1024, HEAT_XS = 3;   // render resolution >> grid resolution
+let heatCanvas, rowMapF, fields;
 function mercY(lat) { const r = lat * Math.PI / 180; return Math.log(Math.tan(Math.PI / 4 + r / 2)); }
 function buildRowMap() {
   const g = META.grid;
   const latTop = g.lat0 + g.dlat * (g.ny - 1), latBot = g.lat0;
   const yT = mercY(latTop + g.dlat / 2), yB = mercY(latBot - g.dlat / 2);
-  rowMap = new Int32Array(HEAT_ROWS);
+  rowMapF = new Float32Array(HEAT_ROWS);
   for (let r = 0; r < HEAT_ROWS; r++) {
     const y = yT + (yB - yT) * (r + 0.5) / HEAT_ROWS;           // top row -> north
     const lat = (2 * Math.atan(Math.exp(y)) - Math.PI / 2) * 180 / Math.PI;
-    let iy = Math.round((lat - g.lat0) / g.dlat);
-    rowMap[r] = Math.max(0, Math.min(g.ny - 1, iy));
+    rowMapF[r] = (lat - g.lat0) / g.dlat;                        // fractional grid row
+  }
+}
+function buildFields(h) {   // per-hour float fields for interpolation (NaN = land)
+  const g = META.grid, n = g.nx * g.ny, s = META.scales, d = DATA.hours[h];
+  if (!fields) fields = {w: new Float32Array(n), c: new Float32Array(n), r: new Float32Array(n)};
+  for (let i = 0; i < n; i++) {
+    if (DATA.mask[i] !== 1) { fields.r[i] = NaN; continue; }
+    const wkt = d.ws[i] / s.wspd, u = d.cu[i] / s.cur, v = d.cv[i] / s.cur;
+    const ckt = Math.hypot(u, v);
+    const wfrom = d.wd[i] * s.wdir;
+    const cdir = (90 - Math.atan2(v, u) * 180 / Math.PI + 360) % 360;
+    const al = angDiff(wfrom, cdir);
+    fields.w[i] = wkt; fields.c[i] = ckt;
+    fields.r[i] = al <= state.cone ? wkt * ckt * Math.cos(al * Math.PI / 180) : 0;
   }
 }
 function renderHeat(h) {
-  const g = META.grid;
+  const g = META.grid, W = g.nx * HEAT_XS;
   if (!heatCanvas) {
     heatCanvas = document.createElement('canvas');
-    heatCanvas.width = g.nx; heatCanvas.height = HEAT_ROWS;
+    heatCanvas.width = W; heatCanvas.height = HEAT_ROWS;
     buildRowMap();
   }
+  buildFields(h);
+  const Fw = fields.w, Fc = fields.c, Fr = fields.r, nx = g.nx, ny = g.ny;
   const ctx = heatCanvas.getContext('2d');
-  const img = ctx.createImageData(g.nx, HEAT_ROWS);
+  const img = ctx.createImageData(W, HEAT_ROWS);
   const px = img.data;
   for (let r = 0; r < HEAT_ROWS; r++) {
-    const iy = rowMap[r], base = iy * g.nx, rowOff = r * g.nx * 4;
-    for (let ix = 0; ix < g.nx; ix++) {
-      const s = scoreCell(base + ix, h);
-      if (s === 0x7fffffff || s === 0) continue;
-      const c = s > 0 ? rampColor(s) : subColor(-s);
-      const o = rowOff + ix * 4;
+    const gy = rowMapF[r];
+    let iy0 = Math.floor(gy); const ty = gy - iy0;
+    if (iy0 < 0) iy0 = 0; else if (iy0 > ny - 2) iy0 = ny - 2;
+    const rowOff = r * W * 4, b0 = iy0 * nx, b1 = (iy0 + 1) * nx;
+    for (let x = 0; x < W; x++) {
+      const gx = (x + 0.5) / HEAT_XS - 0.5;
+      let ix0 = Math.floor(gx); const tx = gx - ix0;
+      if (ix0 < 0) ix0 = 0; else if (ix0 > nx - 2) ix0 = nx - 2;
+      // bilinear over water corners only
+      const i00 = b0 + ix0, i10 = i00 + 1, i01 = b1 + ix0, i11 = i01 + 1;
+      let raw = 0, wk = 0, ck = 0, wsum = 0;
+      let v0 = Fr[i00];
+      if (v0 === v0) { const wgt = (1 - tx) * (1 - ty); raw += v0 * wgt; wk += Fw[i00] * wgt; ck += Fc[i00] * wgt; wsum += wgt; }
+      v0 = Fr[i10];
+      if (v0 === v0) { const wgt = tx * (1 - ty); raw += v0 * wgt; wk += Fw[i10] * wgt; ck += Fc[i10] * wgt; wsum += wgt; }
+      v0 = Fr[i01];
+      if (v0 === v0) { const wgt = (1 - tx) * ty; raw += v0 * wgt; wk += Fw[i01] * wgt; ck += Fc[i01] * wgt; wsum += wgt; }
+      v0 = Fr[i11];
+      if (v0 === v0) { const wgt = tx * ty; raw += v0 * wgt; wk += Fw[i11] * wgt; ck += Fc[i11] * wgt; wsum += wgt; }
+      if (wsum < 0.05) continue;                     // all-land neighbourhood
+      raw /= wsum; wk /= wsum; ck /= wsum;
+      if (raw < 0.3) continue;                       // effectively no opposition
+      const c = (wk >= state.minWind && ck >= state.minCur) ? rampColor(raw) : subColor(raw);
+      const o = rowOff + x * 4;
       px[o] = c[0]; px[o + 1] = c[1]; px[o + 2] = c[2]; px[o + 3] = c[3];
     }
   }
@@ -172,37 +205,39 @@ const ArrowLayer = L.Layer.extend({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, size.x, size.y);
     if (state.arrows === 'off') return;
-    const isWind = state.arrows === 'wind';
-    const SP = 76;
+    const mode = state.arrows;
+    const SP = mode === 'both' ? 100 : 76;
+    const arrow = (x, y, toDeg, len, stroke, lw) => {
+      const t = (90 - toDeg) * Math.PI / 180;
+      const dx = Math.cos(t), dy = -Math.sin(t);
+      const x1 = x + dx * len, y1 = y + dy * len;
+      ctx.strokeStyle = stroke; ctx.lineWidth = lw;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x1, y1); ctx.stroke();
+      const hA = t + 2.6, hB = t - 2.6, hl = Math.min(9, 3.5 + len / 5);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1); ctx.lineTo(x1 + Math.cos(hA) * hl, y1 - Math.sin(hA) * hl);
+      ctx.moveTo(x1, y1); ctx.lineTo(x1 + Math.cos(hB) * hl, y1 - Math.sin(hB) * hl);
+      ctx.stroke();
+    };
     for (let x = SP / 2; x < size.x; x += SP) {
       for (let y = SP / 2; y < size.y; y += SP) {
         const ll = map.containerPointToLatLng([x, y]);
         const i = cellIdx(ll.lat, ll.lng);
         if (i < 0) continue;
         const r = sampleRaw(i, state.t);
-        let toDeg, kt;
-        if (isWind) { toDeg = r.wfrom + 180; kt = r.wkt; }
-        else {
-          if (DATA.mask[i] !== 1 || r.ckt < 0.1) continue;   // current: water only
-          toDeg = r.cdir; kt = r.ckt;
-        }
-        const toRad = (90 - toDeg) * Math.PI / 180;
-        const len = isWind ? Math.min(30, 8 + kt * 1.15) : Math.min(30, 7 + kt * 4.5);
-        const dx = Math.cos(toRad), dy = -Math.sin(toRad);
-        const x0 = x - dx * len / 2, y0 = y - dy * len / 2, x1 = x + dx * len / 2, y1 = y + dy * len / 2;
-        if (isWind) {
-          ctx.strokeStyle = `rgba(22,50,62,${0.35 + Math.min(0.4, kt / 45)})`;
-          ctx.lineWidth = 1 + Math.min(1.6, kt / 14);
-        } else {
-          ctx.strokeStyle = `rgba(14,110,140,${0.5 + Math.min(0.4, kt / 7)})`;
-          ctx.lineWidth = 1.2 + Math.min(1.8, kt / 3);
-        }
-        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
-        const hA = toRad + 2.6, hB = toRad - 2.6, hl = isWind ? 4.5 + kt / 8 : 4 + kt;
-        ctx.beginPath();
-        ctx.moveTo(x1, y1); ctx.lineTo(x1 + Math.cos(hA) * Math.min(hl, 9), y1 - Math.sin(hA) * Math.min(hl, 9));
-        ctx.moveTo(x1, y1); ctx.lineTo(x1 + Math.cos(hB) * Math.min(hl, 9), y1 - Math.sin(hB) * Math.min(hl, 9));
-        ctx.stroke();
+        const water = DATA.mask[i] === 1;
+        const doWind = mode === 'wind' || mode === 'both';
+        const doCur = (mode === 'current' || mode === 'both') && water && r.ckt >= 0.1;
+        if (!doWind && !doCur) continue;
+        // shared anchor dot: arrows radiate from the sample point
+        ctx.fillStyle = 'rgba(22,50,62,.85)';
+        ctx.beginPath(); ctx.arc(x, y, 2, 0, 7); ctx.fill();
+        if (doCur)
+          arrow(x, y, r.cdir, Math.min(34, 4 + r.ckt * 5),
+                `rgba(14,110,140,${0.5 + Math.min(0.4, r.ckt / 7)})`, 1.2 + Math.min(1.8, r.ckt / 3));
+        if (doWind)
+          arrow(x, y, r.wfrom + 180, Math.min(34, 4 + r.wkt * 1.3),
+                `rgba(22,50,62,${0.35 + Math.min(0.4, r.wkt / 45)})`, 1 + Math.min(1.6, r.wkt / 14));
       }
     }
   },
@@ -340,16 +375,27 @@ async function init() {
   const g = META.grid;
   mapL = L.map('leafmap', {zoomSnap: 0.5, minZoom: 8, maxZoom: 14})
     .fitBounds([[g.lat0, g.lon0], [g.lat0 + g.dlat * g.ny, g.lon0 + g.dlon * g.nx]]);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap · OpenSeaMap',
+  const positron = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap · © CARTO · OpenSeaMap',
+    subdomains: 'abcd', maxZoom: 19,
   }).addTo(mapL);
+  const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap · OpenSeaMap',
+  });
   mapL.attributionControl.setPrefix(false);
   // OpenSeaMap seamark overlay: buoys, beacons, lights. Crowd-sourced —
   // orientation aid only, not a navigation chart.
   const seamarks = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png',
     {maxZoom: 18, opacity: 0.9});
   seamarks.addTo(mapL);
-  L.control.layers(null, {'Seamarks (OpenSeaMap)': seamarks}, {position: 'bottomright'}).addTo(mapL);
+  L.control.layers(
+    {'Simple (CARTO)': positron, 'Detailed (OSM)': osm},
+    {'Seamarks (OpenSeaMap)': seamarks},
+    {position: 'bottomright'}
+  ).addTo(mapL);
+  // mute only the busy OSM tiles; Positron needs no filter
+  mapL.on('baselayerchange', e =>
+    document.documentElement.classList.toggle('mute-tiles', /OSM/.test(e.name)));
   arrowLayer = new ArrowLayer(); mapL.addLayer(arrowLayer);
 
   // data-region outline + fade everything outside it
