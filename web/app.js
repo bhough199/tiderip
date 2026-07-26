@@ -608,6 +608,19 @@ async function init() {
   const seamarks = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png',
     {maxZoom: 18, opacity: 0.9});
   seamarks.addTo(mapL);
+  const InfoCtl = L.Control.extend({
+    onAdd() {
+      const div = L.DomUtil.create('div', 'leaflet-bar info-ctl');
+      const btn = L.DomUtil.create('a', '', div);
+      btn.href = '#'; btn.title = 'About Tiderip'; btn.textContent = 'i';
+      L.DomEvent.on(btn, 'click', e => {
+        L.DomEvent.preventDefault(e);
+        document.getElementById('infoModal').style.display = 'flex';
+      });
+      return div;
+    },
+  });
+  new InfoCtl({position: 'bottomright'}).addTo(mapL);
   L.control.layers(
     {'Simple (CARTO)': positron, 'Detailed (OSM)': osm},
     {'Seamarks (OpenSeaMap)': seamarks},
@@ -758,6 +771,11 @@ async function init() {
     p.classList.toggle('collapsed');
     document.getElementById('panelHead').textContent =
       p.classList.contains('collapsed') ? '⚙' : '⚙ Settings';
+  });
+  document.getElementById('infoX').addEventListener('click', () =>
+    document.getElementById('infoModal').style.display = 'none');
+  document.getElementById('infoModal').addEventListener('click', e => {
+    if (e.target.id === 'infoModal') e.target.style.display = 'none';
   });
   document.getElementById('ripReset').addEventListener('click', () => {
     if (state.route) closeRoute();

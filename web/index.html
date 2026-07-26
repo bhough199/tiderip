@@ -137,6 +137,33 @@
     padding:2px 4px; font:inherit; font-size:12px; background:#fff;
   }
 
+  #infoModal{
+    display:none; position:absolute; inset:0; z-index:1500;
+    background:rgba(22,50,62,.45); align-items:center; justify-content:center; padding:16px;
+  }
+  #infoCard{
+    background:var(--panel); border:1.5px solid var(--ink); border-radius:4px;
+    box-shadow:3px 3px 0 rgba(22,50,62,.3); width:min(560px, 100%);
+    max-height:100%; display:flex; flex-direction:column;
+  }
+  #infoHead{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:9px 14px; border-bottom:1px solid var(--panel-edge);
+    font-family:Georgia, serif; font-variant:small-caps; letter-spacing:.12em; font-size:16px;
+  }
+  #infoX{border:none; background:none; font-size:15px; cursor:pointer; color:var(--ink-soft)}
+  #infoX:hover{color:var(--accent)}
+  #infoBody{overflow:auto; padding:4px 14px 14px; font-size:12.5px; line-height:1.5}
+  #infoBody p{margin:8px 0}
+  #infoBody h3{
+    font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--ink-soft); margin:14px 0 2px;
+  }
+  .leaflet-control.info-ctl a{
+    font-size:15px; font-weight:700; font-family:Georgia, serif; font-style:italic;
+    color:var(--ink); text-decoration:none;
+  }
+
   /* compact map attribution */
   .leaflet-control-attribution{
     font-size:8.5px; line-height:1.4; opacity:.8; background:rgba(251,249,243,.75);
@@ -205,6 +232,68 @@
 <div id="stage">
   <div id="leafmap"></div>
   <div id="loading">Loading forecast…</div>
+
+  <div id="infoModal">
+    <div id="infoCard">
+      <div id="infoHead"><b>Tiderip</b><button id="infoX" title="Close">✕</button></div>
+      <div id="infoBody">
+        <p>Tiderip shows you where and when wind will fight the tidal current in the
+        Salish Sea — the conditions that turn a pleasant run into short, steep chop.
+        It combines UBC's SalishSeaCast current forecast with Environment Canada's
+        high-resolution wind forecast, then paints the water with a simple question
+        in mind: <i>would a small boat be comfortable here, at this hour?</i>
+        It covers the Gulf Islands, Saanich Inlet and Sidney, the San Juans, and the
+        waters between Nanaimo, Bellingham, and Race Rocks, roughly two days out.
+        Load it once while you have signal and everything keeps working offline.
+        It's a planning aid built on model forecasts — not a navigation chart, and
+        no substitute for official current tables, your charts, or your own eyes.</p>
+
+        <h3>Set it to your boat</h3>
+        <p>Open the settings gear (top right). Three thresholds — minimum wind,
+        minimum current, and your comfort-max wind — define what counts as trouble
+        on the map, and they're remembered between visits. The defaults suit a very
+        small power boat.</p>
+
+        <h3>Read the map</h3>
+        <p>Colors mark trouble: yellow-to-red where wind opposes current strongly
+        enough to cross your thresholds (deeper red = worse), cobalt blue where wind
+        alone exceeds your comfort max, faint grey-teal where wind opposes current
+        but too weakly to care. Clear water means no flags — check the wind arrows
+        before calling it calm. Arrows show wind (dark) or current (teal) or both;
+        longer arrow = stronger. Switch them in settings.</p>
+
+        <h3>Ask about anywhere</h3>
+        <p>Tap any point of water for the numbers behind the colors: wind, current,
+        opposition score, next slack, next max. The rip bar — the time strip at the
+        bottom — follows your tap, and the yellow star on the map marks the point
+        it's showing. Tap the ✕ next to the bar to return to the default (Boundary
+        Pass). Magenta diamonds mark common passes and crossings — tap one, or pick
+        from the list in settings.</p>
+
+        <h3>Scrub through time</h3>
+        <p>The rip bar covers the whole forecast, hour by hour, for the starred
+        location. Bar height and color show how rough the wind-against-current
+        gets; the teal curve is current speed, so its valleys (circled) are slack
+        and its peaks are max ebb or flood. Drag across the bar to move the map
+        through time, or press play.</p>
+
+        <h3>Plan a trip</h3>
+        <p>In settings → Routes, set your cruise speed and travel window, then tap
+        waypoints on the map and save. With a route selected, each rip-bar hour
+        becomes a possible departure time: green = clear run, warm = wind-against-
+        current somewhere en route, blue = wind over your comfort, grey = outside
+        your window or the forecast. Scrub to a departure hour and the route
+        repaints with what you'd meet along the way.</p>
+
+        <h3>Trust, but verify</h3>
+        <p>Magenta rings are real weather stations showing the latest measured wind
+        next to what the model claimed. The header shows the forecast's age; a
+        warning banner appears if it's stale. Model currents in narrow passes are
+        often right on timing and wrong on strength — keep the official tables for
+        pass transits.</p>
+      </div>
+    </div>
+  </div>
 
   <div id="routeEdit">
     <span class="mono" id="reCount">tap map</span>
