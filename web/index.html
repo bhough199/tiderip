@@ -94,6 +94,18 @@
   #arrowCtl button.active[data-mode="both"]{background:linear-gradient(105deg,#16323E 48%,#0E6E8C 52%); color:#fff}
   #arrowCtl button.active[data-mode="off"]{background:var(--ink-soft); color:#fff}
 
+  .pass-row{
+    display:block; width:100%; text-align:left; border:none; background:none;
+    color:var(--ink); font-size:12px; padding:5px 2px; cursor:pointer;
+    border-bottom:1px dashed var(--panel-edge); font-family:inherit;
+  }
+  .pass-row:last-child{border-bottom:none}
+  .pass-row:hover{color:var(--accent)}
+  .pass-diamond{
+    color:var(--accent); font-size:13px; line-height:14px; text-align:center;
+    text-shadow:0 0 3px rgba(251,249,243,.9); cursor:pointer;
+  }
+
   /* compact map attribution */
   .leaflet-control-attribution{
     font-size:8.5px; line-height:1.4; opacity:.8; background:rgba(251,249,243,.75);
@@ -180,6 +192,10 @@
         </div>
       </section>
       <section>
+        <h2>Passes &amp; crossings</h2>
+        <div id="passList"></div>
+      </section>
+      <section>
         <h2>Your thresholds</h2>
         <div class="row"><label>Min wind</label><input id="minWind" type="range" min="2" max="25" step="1" value="5"><output id="minWindOut" class="mono">5 mph</output></div>
         <div class="row"><label>Comfort max wind</label><input id="comfort" type="range" min="5" max="30" step="1" value="10"><output id="comfortOut" class="mono">10 mph</output></div>
@@ -190,7 +206,7 @@
         <h2>Opposition score</h2>
         <div class="legend-bar"></div>
         <div class="legend-ticks mono"><span id="lgMin">8</span><span>·</span><span id="lgMid">19</span><span>·</span><span id="lgMax">30+</span></div>
-        <div class="legend-note">Score = wind (kt) × current (kt) × alignment. Warm: your thresholds met. Purple: wind above your comfort max, even without opposing current. Faint grey-teal: opposed but below thresholds.</div>
+        <div class="legend-note">Score = wind (kt) × current (kt) × alignment. Warm: your thresholds met. Purple: wind above your comfort max, even without opposing current. Faint grey-teal: opposed but below thresholds. On the rip bar, the teal curve is current speed — circles mark slack, peaks are max ebb/flood.</div>
       </section>
       <section>
         <h2>Worst spots this hour</h2>

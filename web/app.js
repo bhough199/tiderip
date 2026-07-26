@@ -16,6 +16,15 @@ Object.defineProperty(state, 'minWind', {get() { return this.minWindMph * MPH2KT
 Object.defineProperty(state, 'comfortKt', {get() { return this.comfortMph * MPH2KT; }}); // kt
 // the rip bar's home point when nothing is tapped
 const HOME = {name: 'Boundary Pass', lat: 48.713, lon: -123.232};
+// favourite passes & crossings: diamonds on the map + list in settings
+const FAVS = [
+  {name: 'Spieden Channel (Limestone Pt)', lat: 48.617, lon: -123.100},
+  {name: 'Boundary Pass', lat: 48.713, lon: -123.232},
+  {name: 'Haro Strait (Stuart–Sidney)', lat: 48.660, lon: -123.300},
+  {name: 'Orcas–Sucia crossing', lat: 48.735, lon: -122.900},
+  {name: 'Trincomali Channel', lat: 48.930, lon: -123.520},
+  {name: 'Cattle Pass', lat: 48.450, lon: -122.960},
+];
 let META = null, DATA = null;   // DATA: {mask:Uint8Array, hours:[{ws,wd,cu,cv}]}
 let mapL, heatOverlay, arrowLayer, popup;
 
@@ -254,6 +263,41 @@ const ArrowLayer = L.Layer.extend({
   refresh() { this._redraw(); },
 });
 
+/* ---------------- slack & max detection ---------------- */
+function currentSeries(lat, lon) {
+  const H = META.hours.length, ckt = new Float32Array(H), cdir = new Float32Array(H);
+  for (let h = 0; h < H; h++) {
+    const q = scoreAt(lat, lon, h);
+    ckt[h] = q && q.water ? q.ckt : NaN;
+    cdir[h] = q ? q.cdir : 0;
+  }
+  return {ckt, cdir};
+}
+function isSlack(ckt, h) {
+  if (!(ckt[h] === ckt[h])) return false;
+  const a = h > 0 ? ckt[h - 1] : Infinity, b = h < ckt.length - 1 ? ckt[h + 1] : Infinity;
+  return ckt[h] <= a && ckt[h] <= b && ckt[h] < 0.7;
+}
+function isMaxFlow(ckt, h) {
+  if (!(ckt[h] === ckt[h])) return false;
+  const a = h > 0 ? ckt[h - 1] : -Infinity, b = h < ckt.length - 1 ? ckt[h + 1] : -Infinity;
+  return ckt[h] >= a && ckt[h] >= b && ckt[h] > 0.7;
+}
+function nextSlackMax(lat, lon, fromH) {
+  const s = currentSeries(lat, lon);
+  let slack = null, mx = null;
+  for (let h = Math.max(1, fromH); h < META.hours.length - 1; h++) {
+    if (slack === null && isSlack(s.ckt, h)) slack = h;
+    if (mx === null && isMaxFlow(s.ckt, h)) mx = h;
+    if (slack !== null && mx !== null) break;
+  }
+  const t = h => new Date(META.hours[h]).toLocaleString([], {hour: 'numeric', minute: '2-digit'});
+  return {
+    slack: slack !== null ? `~${t(slack)}` : null,
+    max: mx !== null ? `${s.ckt[mx].toFixed(1)} kt ${compass(s.cdir[mx])} ~${t(mx)}` : null,
+  };
+}
+
 /* ---------------- popup ---------------- */
 const COMPASS = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
 const compass = d => COMPASS[Math.round(d / 22.5) % 16];
@@ -270,14 +314,17 @@ function popupHtml(lat, lon) {
       <tr><td>Current</td><td class="mono">${r.ckt.toFixed(1)} kt toward ${compass(r.cdir)}</td></tr>
       <tr><td>Opposition angle</td><td class="mono">${r.align.toFixed(0)}°</td></tr>
       <tr><td><b>Opposition score</b></td><td class="mono"><b>${r.raw > 0 ? r.raw.toFixed(1) : '0'}</b></td></tr>
+      ${(() => { const nx = nextSlackMax(lat, lon, state.t);
+        return (nx.slack ? `<tr><td>Next slack</td><td class="mono">${nx.slack}</td></tr>` : '') +
+               (nx.max ? `<tr><td>Next max</td><td class="mono">${nx.max}</td></tr>` : ''); })()}
     </table>
     <div class="pop-flag ${cls}">${txt}</div>`;
 }
-function openInspect(lat, lon) {
+function openInspect(lat, lon, name) {
   state.inspect = {lat, lon};
   popup = L.popup({maxWidth: 240, autoPan: true, closeOnClick: false})
     .setLatLng([lat, lon]).setContent(popupHtml(lat, lon)).openOn(mapL);
-  document.getElementById('ripMode').textContent = `@ ${lat.toFixed(3)}, ${lon.toFixed(3)}`;
+  document.getElementById('ripMode').textContent = name || `@ ${lat.toFixed(3)}, ${lon.toFixed(3)}`;
   document.getElementById('ripReset').style.display = 'inline-block';
   drawRip();
 }
@@ -298,10 +345,11 @@ function drawRip() {
   const w = wrap.width, hgt = wrap.height, H = META.hours.length, seg = w / H;
   rctx.clearRect(0, 0, w, hgt);
   const loc = state.inspect || HOME;
-  const bars = [];
+  const bars = [], ckt = new Float32Array(H);
   for (let h = 0; h < H; h++) {
     const q = scoreAt(loc.lat, loc.lon, h);
     bars.push(q && q.water ? {v: q.raw, g: q.s > 0} : {v: 0, g: false});
+    ckt[h] = q && q.water ? q.ckt : NaN;
   }
   const top = Math.max(30, ...bars.map(b => b.v));
   for (let h = 0; h < H; h++) {
@@ -313,6 +361,26 @@ function drawRip() {
       if (bars[h].g) { const c = rampColor(bars[h].v); rctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},.95)`; }
       else rctx.fillStyle = 'rgba(70,120,130,.55)';
       rctx.fillRect(h * seg + 1, hgt - bh - 2, Math.max(1, seg - 2), bh);
+    }
+  }
+  // current-speed curve: slack = curve at the bottom, max ebb/flood = peaks
+  const cmax = Math.max(2, ...Array.from(ckt).filter(v => v === v));
+  const cy = h => hgt - 2 - (ckt[h] / cmax) * (hgt - 10);
+  rctx.strokeStyle = 'rgba(14,110,140,.9)'; rctx.lineWidth = 1.5;
+  rctx.beginPath();
+  let pen = false;
+  for (let h = 0; h < H; h++) {
+    if (!(ckt[h] === ckt[h])) { pen = false; continue; }
+    const X = (h + 0.5) * seg, Y = cy(h);
+    pen ? rctx.lineTo(X, Y) : rctx.moveTo(X, Y);
+    pen = true;
+  }
+  rctx.stroke();
+  rctx.fillStyle = '#FBF9F3'; rctx.strokeStyle = 'rgba(14,110,140,1)';
+  for (let h = 1; h < H - 1; h++) {
+    if (isSlack(ckt, h)) {
+      rctx.beginPath(); rctx.arc((h + 0.5) * seg, cy(h), 2.8, 0, 7);
+      rctx.fill(); rctx.stroke();
     }
   }
   rctx.fillStyle = '#B01E6E';
@@ -407,6 +475,19 @@ async function init() {
   L.rectangle([b0, b1], {color: '#B01E6E', weight: 1.5, dashArray: '6 4', fill: false, interactive: false}).addTo(mapL);
 
   mapL.on('click', e => openInspect(e.latlng.lat, e.latlng.lng));
+
+  // favourite pass diamonds + settings list
+  const passList = document.getElementById('passList');
+  FAVS.forEach(p => {
+    L.marker([p.lat, p.lon], {
+      icon: L.divIcon({className: 'pass-diamond', html: '◆', iconSize: [14, 14], iconAnchor: [7, 7]}),
+      title: p.name, keyboard: false,
+    }).addTo(mapL).on('click', () => openInspect(p.lat, p.lon, p.name));
+    const b = document.createElement('button');
+    b.className = 'pass-row'; b.textContent = p.name;
+    b.addEventListener('click', () => { mapL.panTo([p.lat, p.lon]); openInspect(p.lat, p.lon, p.name); });
+    passList.appendChild(b);
+  });
   mapL.on('popupclose', () => { if (state.inspect) closeInspect(); });
 
   document.getElementById('sources').innerHTML =
