@@ -119,14 +119,6 @@ const FAVS = [
 let META = null, DATA = null;   // DATA: {mask:Uint8Array, hours:[{ws,wd,cu,cv}]}
 let mapL, heatOverlay, arrowLayer, popup;
 
-const PASSES = [
-  ['Dodd Narrows', 49.137, -123.817], ['Gabriola Pass', 49.128, -123.700],
-  ['Porlier Pass', 49.015, -123.585], ['Active Pass', 48.867, -123.290],
-  ['Boundary Pass', 48.720, -123.060], ['Haro Strait', 48.560, -123.170],
-  ['Sansum Narrows', 48.785, -123.555], ['San Juan Channel', 48.510, -122.950],
-  ['Rosario Strait', 48.550, -122.750], ['Spieden Channel', 48.640, -123.150],
-  ['Satellite Channel', 48.710, -123.490], ['Trincomali Channel', 48.930, -123.520],
-];
 
 /* ---------------- data loading ---------------- */
 async function loadData() {
@@ -551,13 +543,6 @@ function updateReadouts() {
     document.getElementById('timeLabel').innerHTML =
       `<b class="mono">${fmtHour(META.hours[state.t])}</b> <span class="mono" style="color:var(--ink-soft)">(T+${state.t}h)</span>`;
   }
-  const list = PASSES.map(([name, la, lo]) => ({name, r: scoreAt(la, lo, state.t)}))
-    .filter(x => x.r).sort((a, b) => b.r.s - a.r.s).slice(0, 6);
-  document.getElementById('hotspots').innerHTML = list.map(x =>
-    x.r.s <= 0
-      ? `<div><span>${x.name}</span><span class="score calm mono">—</span></div>`
-      : `<div><span>${x.name}</span><span class="score mono" style="color:${x.r.s >= 22 ? 'var(--warn4)' : x.r.s >= 14 ? 'var(--warn3)' : 'var(--warn2)'}">${x.r.s.toFixed(0)}</span></div>`
-  ).join('');
   const lo = state.minWind * state.minCur;
   document.getElementById('lgMin').textContent = lo.toFixed(0);
   document.getElementById('lgMid').textContent = ((lo + Math.max(lo + 12, 30)) / 2).toFixed(0);
