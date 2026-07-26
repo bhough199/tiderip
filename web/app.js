@@ -109,12 +109,12 @@ function closeRoute() {
 
 // favourite passes & crossings: diamonds on the map + list in settings
 const FAVS = [
-  {name: 'Spieden Channel (Limestone Pt)', lat: 48.617, lon: -123.100},
+  {name: 'Speiden Channel', lat: 48.626, lon: -123.105},
   {name: 'Boundary Pass', lat: 48.713, lon: -123.232},
-  {name: 'Haro Strait (Stuart–Sidney)', lat: 48.660, lon: -123.300},
+  {name: 'Haro Strait (Stuart–Sidney)', lat: 48.674, lon: -123.257},
   {name: 'Orcas–Sucia crossing', lat: 48.735, lon: -122.900},
   {name: 'Trincomali Channel', lat: 48.930, lon: -123.520},
-  {name: 'Cattle Pass', lat: 48.450, lon: -122.960},
+  {name: 'Cattle Pass', lat: 48.454, lon: -122.950},
 ];
 let META = null, DATA = null;   // DATA: {mask:Uint8Array, hours:[{ws,wd,cu,cv}]}
 let mapL, heatOverlay, arrowLayer, popup;
