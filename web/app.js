@@ -349,38 +349,10 @@ const ArrowLayer = L.Layer.extend({
 });
 
 /* ---------------- slack & max detection ---------------- */
-function currentSeries(lat, lon) {
-  const H = META.hours.length, ckt = new Float32Array(H), cdir = new Float32Array(H);
-  for (let h = 0; h < H; h++) {
-    const q = scoreAt(lat, lon, h);
-    ckt[h] = q && q.water ? q.ckt : NaN;
-    cdir[h] = q ? q.cdir : 0;
-  }
-  return {ckt, cdir};
-}
 function isSlack(ckt, h) {
   if (!(ckt[h] === ckt[h])) return false;
   const a = h > 0 ? ckt[h - 1] : Infinity, b = h < ckt.length - 1 ? ckt[h + 1] : Infinity;
   return ckt[h] <= a && ckt[h] <= b && ckt[h] < 0.7;
-}
-function isMaxFlow(ckt, h) {
-  if (!(ckt[h] === ckt[h])) return false;
-  const a = h > 0 ? ckt[h - 1] : -Infinity, b = h < ckt.length - 1 ? ckt[h + 1] : -Infinity;
-  return ckt[h] >= a && ckt[h] >= b && ckt[h] > 0.7;
-}
-function nextSlackMax(lat, lon, fromH) {
-  const s = currentSeries(lat, lon);
-  let slack = null, mx = null;
-  for (let h = Math.max(1, fromH); h < META.hours.length - 1; h++) {
-    if (slack === null && isSlack(s.ckt, h)) slack = h;
-    if (mx === null && isMaxFlow(s.ckt, h)) mx = h;
-    if (slack !== null && mx !== null) break;
-  }
-  const t = h => new Date(META.hours[h]).toLocaleString([], {hour: 'numeric', minute: '2-digit'});
-  return {
-    slack: slack !== null ? `~${t(slack)}` : null,
-    max: mx !== null ? `${s.ckt[mx].toFixed(1)} kt ${compass(s.cdir[mx])} ~${t(mx)}` : null,
-  };
 }
 
 /* ---------------- popup ---------------- */
@@ -399,9 +371,6 @@ function popupHtml(lat, lon) {
       <tr><td>Current</td><td class="mono">${r.ckt.toFixed(1)} kt toward ${compass(r.cdir)}</td></tr>
       <tr><td>Opposition angle</td><td class="mono">${r.align.toFixed(0)}°</td></tr>
       <tr><td><b>Opposition score</b></td><td class="mono"><b>${r.raw > 0 ? r.raw.toFixed(1) : '0'}</b></td></tr>
-      ${(() => { const nx = nextSlackMax(lat, lon, state.t);
-        return (nx.slack ? `<tr><td>Next slack</td><td class="mono">${nx.slack}</td></tr>` : '') +
-               (nx.max ? `<tr><td>Next max</td><td class="mono">${nx.max}</td></tr>` : ''); })()}
     </table>
     <div class="pop-flag ${cls}">${txt}</div>`;
 }
