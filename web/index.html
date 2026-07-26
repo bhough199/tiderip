@@ -82,6 +82,12 @@
     flex:1; border:1.5px solid var(--ink); background:var(--panel); color:var(--ink);
     border-radius:3px; padding:5px 0; font-size:11.5px; cursor:pointer; font-weight:600;
   }
+  #arrowCtl button[data-mode="wind"]{color:#16323E; border-color:#16323E}
+  #arrowCtl button[data-mode="current"]{color:#0E6E8C; border-color:#0E6E8C}
+  #arrowCtl button[data-mode="both"]{
+    color:#16323E; border-color:#16323E;
+    background:linear-gradient(105deg, rgba(22,50,62,.10) 48%, rgba(14,110,140,.14) 52%);
+  }
   #arrowCtl button:hover{background:var(--land)}
   #arrowCtl button.active[data-mode="wind"]{background:#16323E; color:#fff}
   #arrowCtl button.active[data-mode="current"]{background:#0E6E8C; color:#fff}

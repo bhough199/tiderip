@@ -206,7 +206,7 @@ const ArrowLayer = L.Layer.extend({
     ctx.clearRect(0, 0, size.x, size.y);
     if (state.arrows === 'off') return;
     const mode = state.arrows;
-    const SP = mode === 'both' ? 100 : 76;
+    const SP = 76;
     const arrow = (x, y, toDeg, len, stroke, lw) => {
       const t = (90 - toDeg) * Math.PI / 180;
       const dx = Math.cos(t), dy = -Math.sin(t);
@@ -229,9 +229,6 @@ const ArrowLayer = L.Layer.extend({
         const doWind = mode === 'wind' || mode === 'both';
         const doCur = (mode === 'current' || mode === 'both') && water && r.ckt >= 0.1;
         if (!doWind && !doCur) continue;
-        // shared anchor dot: arrows radiate from the sample point
-        ctx.fillStyle = 'rgba(22,50,62,.85)';
-        ctx.beginPath(); ctx.arc(x, y, 2, 0, 7); ctx.fill();
         if (doCur)
           arrow(x, y, r.cdir, Math.min(34, 4 + r.ckt * 5),
                 `rgba(14,110,140,${0.5 + Math.min(0.4, r.ckt / 7)})`, 1.2 + Math.min(1.8, r.ckt / 3));
