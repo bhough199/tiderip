@@ -16,6 +16,97 @@ Object.defineProperty(state, 'minWind', {get() { return this.minWindMph * MPH2KT
 Object.defineProperty(state, 'comfortKt', {get() { return this.comfortMph * MPH2KT; }}); // kt
 // the rip bar's home point when nothing is tapped
 const HOME = {name: 'Boundary Pass', lat: 48.713, lon: -123.232};
+// saved routes (localStorage) and route-planner state
+let ROUTES = JSON.parse(localStorage.getItem('tr_routes') || '[]');
+const saveRoutes = () => localStorage.setItem('tr_routes', JSON.stringify(ROUTES));
+state.route = null;      // selected route object
+state.editing = null;    // {pts: [[lat,lon],...]} while drawing a new route
+let routeLayer, editLayer;
+
+function distNm(a1, o1, a2, o2) {
+  const R = 3440.065, r = Math.PI / 180;
+  const dLat = (a2 - a1) * r, dLon = (o2 - o1) * r;
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(a1 * r) * Math.cos(a2 * r) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+function routeSamples(route) {   // points every ~0.4 nm with cumulative distance
+  const out = [];
+  let d = 0;
+  for (let i = 0; i < route.pts.length - 1; i++) {
+    const [a1, o1] = route.pts[i], [a2, o2] = route.pts[i + 1];
+    const leg = distNm(a1, o1, a2, o2), steps = Math.max(1, Math.ceil(leg / 0.4));
+    for (let k = 0; k < steps; k++) {
+      const f = k / steps;
+      out.push({lat: a1 + (a2 - a1) * f, lon: o1 + (o2 - o1) * f, d: d + leg * f});
+    }
+    d += leg;
+  }
+  const last = route.pts[route.pts.length - 1];
+  out.push({lat: last[0], lon: last[1], d});
+  return out;
+}
+function evalDeparture(samples, route, h0) {
+  const H = META.hours.length;
+  const dep = new Date(META.hours[h0]);
+  const durH = samples[samples.length - 1].d / route.speedKt;
+  const arr = new Date(dep.getTime() + durH * 3600e3);
+  const arrLH = arr.getHours() + arr.getMinutes() / 60;
+  if (dep.getHours() < route.startHH || arr.getDate() !== dep.getDate() || arrLH > route.endHH)
+    return {ok: false, reason: 'window'};
+  let worst = 0, wkMax = 0;
+  for (const s of samples) {
+    const hi = Math.round(h0 + s.d / route.speedKt);
+    if (hi >= H) return {ok: false, reason: 'horizon'};
+    const q = scoreAt(s.lat, s.lon, hi);
+    if (!q) continue;
+    if (q.s > worst) worst = q.s;
+    if (q.wkt > wkMax) wkMax = q.wkt;
+  }
+  return {ok: true, worst, purple: wkMax >= state.comfortKt, durH};
+}
+function segColor(q) {
+  if (!q) return '#9aa5a9';
+  if (q.s > 0) { const c = rampColor(q.s); return `rgb(${c[0]},${c[1]},${c[2]})`; }
+  if (q.wkt >= state.comfortKt) return '#7A3CA5';
+  if (q.raw >= 0.3) return '#4a7883';
+  return '#5E8F6C';
+}
+function paintRoute(h0) {
+  if (!routeLayer || !state.route) return;
+  routeLayer.clearLayers();
+  const samples = routeSamples(state.route), H = META.hours.length;
+  for (let i = 0; i < samples.length - 1; i++) {
+    const hi = Math.round(h0 + samples[i].d / state.route.speedKt);
+    const beyond = hi >= H;
+    const q = beyond ? null : scoreAt(samples[i].lat, samples[i].lon, hi);
+    L.polyline([[samples[i].lat, samples[i].lon], [samples[i + 1].lat, samples[i + 1].lon]], {
+      color: segColor(q), weight: 5, opacity: 0.95,
+      dashArray: beyond ? '4 6' : null, interactive: false,
+    }).addTo(routeLayer);
+  }
+  route_markersFor(state.route);
+}
+function route_markersFor(route) {
+  route.pts.forEach(p => L.circleMarker(p, {
+    radius: 4, color: '#16323E', weight: 1.5, fillColor: '#FBF9F3', fillOpacity: 1, interactive: false,
+  }).addTo(routeLayer));
+}
+function selectRoute(r) {
+  state.route = r;
+  document.getElementById('ripMode').textContent = r.name;
+  document.getElementById('ripReset').style.display = 'inline-block';
+  routeLayer.clearLayers();
+  mapL.fitBounds(r.pts, {padding: [40, 40]});
+  refreshAll();
+}
+function closeRoute() {
+  state.route = null;
+  if (routeLayer) routeLayer.clearLayers();
+  document.getElementById('ripMode').textContent = HOME.name;
+  document.getElementById('ripReset').style.display = state.inspect ? 'inline-block' : 'none';
+  refreshAll();
+}
+
 // favourite passes & crossings: diamonds on the map + list in settings
 const FAVS = [
   {name: 'Spieden Channel (Limestone Pt)', lat: 48.617, lon: -123.100},
@@ -344,6 +435,7 @@ function drawRip() {
   rctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const w = wrap.width, hgt = wrap.height, H = META.hours.length, seg = w / H;
   rctx.clearRect(0, 0, w, hgt);
+  if (state.route && !state.editing) { drawDepartureStrip(w, hgt, H, seg); return; }
   const loc = state.inspect || HOME;
   const bars = [], ckt = new Float32Array(H);
   for (let h = 0; h < H; h++) {
@@ -397,11 +489,68 @@ function drawRip() {
   }
 }
 
+function drawDepartureStrip(w, hgt, H, seg) {
+  const samples = routeSamples(state.route);
+  const evals = [];
+  for (let h = 0; h < H; h++) evals.push(evalDeparture(samples, state.route, h));
+  const top = Math.max(30, ...evals.filter(e => e.ok).map(e => e.worst));
+  for (let h = 0; h < H; h++) {
+    const hr = new Date(META.hours[h]).getHours();
+    if (hr < 6 || hr >= 21) { rctx.fillStyle = 'rgba(22,50,62,.18)'; rctx.fillRect(h * seg, 0, seg, hgt); }
+    const e = evals[h];
+    if (!e.ok) {   // outside travel window or beyond forecast: flat grey dash
+      rctx.fillStyle = 'rgba(22,50,62,.22)';
+      rctx.fillRect(h * seg + 1, hgt - 4, Math.max(1, seg - 2), 2);
+      continue;
+    }
+    let color, bh;
+    if (e.worst > 0) {
+      const c = rampColor(e.worst); color = `rgba(${c[0]},${c[1]},${c[2]},.95)`;
+      bh = Math.max(4, e.worst / top * (hgt - 8));
+    } else if (e.purple) {
+      color = 'rgba(122,60,165,.85)'; bh = 10;
+    } else {
+      color = 'rgba(94,143,108,.9)'; bh = 5;
+    }
+    rctx.fillStyle = color;
+    rctx.fillRect(h * seg + 1, hgt - bh - 2, Math.max(1, seg - 2), bh);
+    if (e.worst > 0 && e.purple) {   // warm bar with comfort-wind breach: purple cap
+      rctx.fillStyle = 'rgba(122,60,165,.95)';
+      rctx.fillRect(h * seg + 1, hgt - bh - 4, Math.max(1, seg - 2), 2.5);
+    }
+  }
+  rctx.fillStyle = '#B01E6E';
+  rctx.fillRect(state.t * seg, 0, 2.5, hgt);
+  rctx.font = '9px ui-monospace, Menlo, monospace';
+  for (let h = 0; h < H; h++) {
+    const d = new Date(META.hours[h]);
+    if (h === 0 || d.getHours() === 0) {
+      if (h > 0) { rctx.fillStyle = 'rgba(22,50,62,.5)'; rctx.fillRect(h * seg, 0, 1, hgt); }
+      rctx.fillStyle = 'rgba(22,50,62,.85)';
+      rctx.fillText(d.toLocaleDateString([], {weekday: 'short', day: 'numeric'}), h * seg + 4, 10);
+    }
+  }
+}
+
 /* ---------------- readouts ---------------- */
 const fmtHour = iso => new Date(iso).toLocaleString([], {weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
 function updateReadouts() {
-  document.getElementById('timeLabel').innerHTML =
-    `<b class="mono">${fmtHour(META.hours[state.t])}</b> <span class="mono" style="color:var(--ink-soft)">(T+${state.t}h)</span>`;
+  if (state.route && !state.editing) {
+    const samples = routeSamples(state.route);
+    const e = evalDeparture(samples, state.route, state.t);
+    const dep = new Date(META.hours[state.t]);
+    let right = 'outside travel window / forecast';
+    if (e.ok) {
+      const arr = new Date(dep.getTime() + e.durH * 3600e3);
+      right = `arrive ~${arr.toLocaleString([], {hour: 'numeric', minute: '2-digit'})} · ${samples[samples.length - 1].d.toFixed(1)} nm`;
+    }
+    document.getElementById('timeLabel').innerHTML =
+      `Depart <b class="mono">${fmtHour(META.hours[state.t])}</b> <span class="mono" style="color:var(--ink-soft)">${right}</span>`;
+    paintRoute(state.t);
+  } else {
+    document.getElementById('timeLabel').innerHTML =
+      `<b class="mono">${fmtHour(META.hours[state.t])}</b> <span class="mono" style="color:var(--ink-soft)">(T+${state.t}h)</span>`;
+  }
   const list = PASSES.map(([name, la, lo]) => ({name, r: scoreAt(la, lo, state.t)}))
     .filter(x => x.r).sort((a, b) => b.r.s - a.r.s).slice(0, 6);
   document.getElementById('hotspots').innerHTML = list.map(x =>
@@ -474,7 +623,16 @@ async function init() {
   ], {stroke: false, fillColor: '#16323E', fillOpacity: 0.28, interactive: false}).addTo(mapL);
   L.rectangle([b0, b1], {color: '#B01E6E', weight: 1.5, dashArray: '6 4', fill: false, interactive: false}).addTo(mapL);
 
-  mapL.on('click', e => openInspect(e.latlng.lat, e.latlng.lng));
+  mapL.on('click', e => {
+    if (state.editing) {
+      state.editing.pts.push([e.latlng.lat, e.latlng.lng]);
+      redrawEdit();
+      return;
+    }
+    openInspect(e.latlng.lat, e.latlng.lng);
+  });
+  routeLayer = L.layerGroup().addTo(mapL);
+  editLayer = L.layerGroup().addTo(mapL);
 
   // favourite pass diamonds + settings list
   const passList = document.getElementById('passList');
@@ -487,6 +645,61 @@ async function init() {
     b.className = 'pass-row'; b.textContent = p.name;
     b.addEventListener('click', () => { mapL.panTo([p.lat, p.lon]); openInspect(p.lat, p.lon, p.name); });
     passList.appendChild(b);
+  });
+
+  // ----- routes UI -----
+  const routeListEl = document.getElementById('routeList');
+  const editBar = document.getElementById('routeEdit');
+  window.redrawEdit = function () {
+    editLayer.clearLayers();
+    const pts = state.editing.pts;
+    if (pts.length > 1) L.polyline(pts, {color: '#B01E6E', weight: 3, dashArray: '5 5'}).addTo(editLayer);
+    pts.forEach(p => L.circleMarker(p, {radius: 4, color: '#B01E6E', fillColor: '#FBF9F3', fillOpacity: 1, weight: 2}).addTo(editLayer));
+    document.getElementById('reCount').textContent = pts.length ? `${pts.length} pt${pts.length > 1 ? 's' : ''}` : 'tap map';
+  };
+  function renderRoutes() {
+    routeListEl.innerHTML = '';
+    ROUTES.forEach((r, i) => {
+      const row = document.createElement('div'); row.className = 'route-row';
+      const b = document.createElement('button'); b.className = 'pass-row'; b.textContent = r.name;
+      b.addEventListener('click', () => selectRoute(r));
+      const del = document.createElement('button'); del.className = 'route-del'; del.textContent = '✕';
+      del.title = 'Delete route';
+      del.addEventListener('click', () => {
+        if (state.route === ROUTES[i]) closeRoute();
+        ROUTES.splice(i, 1); saveRoutes(); renderRoutes();
+      });
+      row.appendChild(b); row.appendChild(del);
+      routeListEl.appendChild(row);
+    });
+  }
+  renderRoutes();
+  function endEdit() {
+    state.editing = null; editLayer.clearLayers(); editBar.style.display = 'none';
+  }
+  document.getElementById('newRoute').addEventListener('click', () => {
+    if (state.route) closeRoute();
+    if (state.inspect) closeInspect();
+    state.editing = {pts: []};
+    editBar.style.display = 'flex';
+    redrawEdit();
+    document.getElementById('panel').classList.add('collapsed');
+    document.getElementById('panelHead').textContent = '⚙';
+  });
+  document.getElementById('reUndo').addEventListener('click', () => {
+    if (state.editing) { state.editing.pts.pop(); redrawEdit(); }
+  });
+  document.getElementById('reCancel').addEventListener('click', endEdit);
+  document.getElementById('reSave').addEventListener('click', () => {
+    if (!state.editing || state.editing.pts.length < 2) { alert('A route needs at least 2 waypoints.'); return; }
+    const name = (prompt('Route name?') || '').trim() || `Route ${ROUTES.length + 1}`;
+    const r = {
+      name, pts: state.editing.pts,
+      speedKt: Math.max(2, +document.getElementById('rtSpeed').value || 12),
+      startHH: Math.min(23, Math.max(0, +document.getElementById('rtStart').value || 6)),
+      endHH: Math.min(24, Math.max(1, +document.getElementById('rtEnd').value || 19)),
+    };
+    ROUTES.push(r); saveRoutes(); renderRoutes(); endEdit(); selectRoute(r);
   });
   mapL.on('popupclose', () => { if (state.inspect) closeInspect(); });
 
@@ -515,7 +728,10 @@ async function init() {
     document.getElementById('panelHead').textContent =
       p.classList.contains('collapsed') ? '⚙' : '⚙ Settings';
   });
-  document.getElementById('ripReset').addEventListener('click', closeInspect);
+  document.getElementById('ripReset').addEventListener('click', () => {
+    if (state.route) closeRoute();
+    else closeInspect();
+  });
 
   // arrow overlay mode: wind / current / off
   const arrowBtns = document.querySelectorAll('#arrowCtl button');
