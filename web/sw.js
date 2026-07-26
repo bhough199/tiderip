@@ -1,6 +1,6 @@
 /* Tiderip service worker: cache app shell (cache-first) and forecast data
    (network-first, falling back to last cached copy when offline). */
-const SHELL = 'tiderip-shell-v16';
+const SHELL = 'tiderip-shell-v17';
 const DATA = 'tiderip-data-v1';
 const SHELL_FILES = [
   './', 'index.html', 'app.js', 'manifest.webmanifest',

@@ -67,7 +67,7 @@ function evalDeparture(samples, route, h0) {
 function segColor(q) {
   if (!q) return '#9aa5a9';
   if (q.s > 0) { const c = rampColor(q.s); return `rgb(${c[0]},${c[1]},${c[2]})`; }
-  if (q.wkt >= state.comfortKt) return '#7A3CA5';
+  if (q.wkt >= state.comfortKt) return '#324AB2';
   if (q.raw >= 0.3) return '#4a7883';
   return '#5E8F6C';
 }
@@ -203,7 +203,7 @@ function rampColor(s) {
 }
 function windColor(wk) {   // wind above comfort threshold, no (gated) opposition
   const n = Math.max(0, Math.min(1, (wk - state.comfortKt) / Math.max(state.comfortKt, 1)));
-  return [122, 60, 165, Math.round(255 * (0.28 + 0.42 * n))];
+  return [50, 74, 178, Math.round(255 * (0.30 + 0.42 * n))];   // cobalt (seamark lanes are purple)
 }
 function subColor(raw) {
   const lo = Math.max(1, state.minWind * state.minCur);
@@ -508,14 +508,14 @@ function drawDepartureStrip(w, hgt, H, seg) {
       const c = rampColor(e.worst); color = `rgba(${c[0]},${c[1]},${c[2]},.95)`;
       bh = Math.max(4, e.worst / top * (hgt - 8));
     } else if (e.purple) {
-      color = 'rgba(122,60,165,.85)'; bh = 10;
+      color = 'rgba(50,74,178,.85)'; bh = 10;
     } else {
       color = 'rgba(94,143,108,.9)'; bh = 5;
     }
     rctx.fillStyle = color;
     rctx.fillRect(h * seg + 1, hgt - bh - 2, Math.max(1, seg - 2), bh);
-    if (e.worst > 0 && e.purple) {   // warm bar with comfort-wind breach: purple cap
-      rctx.fillStyle = 'rgba(122,60,165,.95)';
+    if (e.worst > 0 && e.purple) {   // warm bar with comfort-wind breach: cobalt cap
+      rctx.fillStyle = 'rgba(50,74,178,.95)';
       rctx.fillRect(h * seg + 1, hgt - bh - 4, Math.max(1, seg - 2), 2.5);
     }
   }
@@ -633,6 +633,32 @@ async function init() {
   });
   routeLayer = L.layerGroup().addTo(mapL);
   editLayer = L.layerGroup().addTo(mapL);
+
+  // observation stations: model vs measured at build time
+  if (META.stations && META.stations.length) {
+    let sumAbs = 0, nOk = 0;
+    META.stations.forEach(st => {
+      const delta = st.model_kt - st.obs_kt;
+      sumAbs += Math.abs(delta); nOk++;
+      L.marker([st.lat, st.lon], {
+        icon: L.divIcon({className: 'obs-glyph', html: '◎', iconSize: [14, 14], iconAnchor: [7, 7]}),
+        title: st.name, keyboard: false,
+      }).addTo(mapL).on('click', () => {
+        L.popup({maxWidth: 240})
+          .setLatLng([st.lat, st.lon])
+          .setContent(`<b>${st.name}</b><br>
+            <table class="pop-table">
+              <tr><td>Observed</td><td class="mono">${st.obs_kt.toFixed(1)} kt ${compass(st.obs_dir)}</td></tr>
+              <tr><td>Model said</td><td class="mono">${st.model_kt.toFixed(1)} kt ${compass(st.model_dir)}</td></tr>
+              <tr><td>Difference</td><td class="mono">${delta >= 0 ? '+' : ''}${delta.toFixed(1)} kt</td></tr>
+            </table>
+            <div style="font-size:10.5px;color:var(--ink-soft);margin-top:4px">observed ${st.obs_time || 'near build time'}</div>`)
+          .openOn(mapL);
+      });
+    });
+    if (nOk) document.getElementById('sources').innerHTML +=
+      `<br>Model vs ${nOk} station${nOk > 1 ? 's' : ''} at build: avg wind error ${(sumAbs / nOk).toFixed(1)} kt`;
+  }
 
   // favourite pass diamonds + settings list
   const passList = document.getElementById('passList');

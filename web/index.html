@@ -101,6 +101,10 @@
   }
   .pass-row:last-child{border-bottom:none}
   .pass-row:hover{color:var(--accent)}
+  .obs-glyph{
+    color:#16323E; font-size:12px; line-height:14px; text-align:center;
+    text-shadow:0 0 3px rgba(251,249,243,.9); cursor:pointer;
+  }
   .pass-diamond{
     color:var(--accent); font-size:13px; line-height:14px; text-align:center;
     text-shadow:0 0 3px rgba(251,249,243,.9); cursor:pointer;
@@ -236,7 +240,7 @@
         <button id="newRoute" class="pass-row" style="font-weight:700">+ New route</button>
         <div style="font-size:10.5px; color:var(--ink-soft); margin-top:4px; line-height:1.35">
           Speed &amp; window are captured when you save a route. With a route selected,
-          each rip-bar hour is a <b>departure time</b>: green = clear run, purple = wind
+          each rip-bar hour is a <b>departure time</b>: green = clear run, blue = wind
           over comfort en route, warm = wind-against-current en route. Grey dashes =
           outside your travel window or past the forecast.
         </div>
@@ -252,7 +256,7 @@
         <h2>Opposition score</h2>
         <div class="legend-bar"></div>
         <div class="legend-ticks mono"><span id="lgMin">8</span><span>·</span><span id="lgMid">19</span><span>·</span><span id="lgMax">30+</span></div>
-        <div class="legend-note">Score = wind (kt) × current (kt) × alignment. Warm: your thresholds met. Purple: wind above your comfort max, even without opposing current. Faint grey-teal: opposed but below thresholds. On the rip bar, the teal curve is current speed — circles mark slack, peaks are max ebb/flood.</div>
+        <div class="legend-note">Score = wind (kt) × current (kt) × alignment. Warm: your thresholds met. Cobalt blue: wind above your comfort max, even without opposing current. Faint grey-teal: opposed but below thresholds. On the rip bar, the teal curve is current speed — circles mark slack, peaks are max ebb/flood.</div>
       </section>
       <section>
         <h2>Worst spots this hour</h2>
