@@ -72,6 +72,24 @@ def main():
         ),
     )
 
+    # model-vs-observed wind at build time (never fatal)
+    stations = []
+    try:
+        from fetch_obs import fetch_obs
+        h0 = common[0]
+        wspd0, wdir0 = wind["speed"][wi[h0]], wind["direction"][wi[h0]]
+        for st in fetch_obs():
+            ix = int(round((st["lon"] - (C.BBOX["lon0"] + C.DLON / 2)) / C.DLON))
+            iy = int(round((st["lat"] - (C.BBOX["lat0"] + C.DLAT / 2)) / C.DLAT))
+            if 0 <= ix < nx and 0 <= iy < ny:
+                st["model_kt"] = round(float(wspd0[iy, ix]), 1)
+                st["model_dir"] = round(float(wdir0[iy, ix]), 0)
+                st["obs_kt"] = round(st["obs_kt"], 1)
+                stations.append(st)
+    except Exception as e:  # noqa: BLE001
+        print(f"obs: comparison skipped entirely: {e}")
+    meta["stations"] = stations
+
     os.makedirs(C.OUT_DIR, exist_ok=True)
     with open(f"{C.OUT_DIR}/forecast.bin", "wb") as f:
         f.write(blob)
