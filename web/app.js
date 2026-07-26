@@ -97,6 +97,7 @@ function selectRoute(r) {
   document.getElementById('ripReset').style.display = 'inline-block';
   routeLayer.clearLayers();
   mapL.fitBounds(r.pts, {padding: [40, 40]});
+  updateStar();
   refreshAll();
 }
 function closeRoute() {
@@ -104,6 +105,7 @@ function closeRoute() {
   if (routeLayer) routeLayer.clearLayers();
   document.getElementById('ripMode').textContent = HOME.name;
   document.getElementById('ripReset').style.display = state.inspect ? 'inline-block' : 'none';
+  updateStar();
   refreshAll();
 }
 
@@ -408,14 +410,31 @@ function openInspect(lat, lon, name) {
   popup = L.popup({maxWidth: 240, autoPan: true, closeOnClick: false})
     .setLatLng([lat, lon]).setContent(popupHtml(lat, lon)).openOn(mapL);
   document.getElementById('ripMode').textContent = name || `@ ${lat.toFixed(3)}, ${lon.toFixed(3)}`;
+  updateStar();
   document.getElementById('ripReset').style.display = 'inline-block';
   drawRip();
+}
+let starMarker = null;
+function updateStar() {
+  if (!mapL) return;
+  const loc = state.route ? null : (state.inspect || HOME);
+  if (!loc) {
+    if (starMarker) { mapL.removeLayer(starMarker); starMarker = null; }
+    return;
+  }
+  if (!starMarker) {
+    starMarker = L.marker([loc.lat, loc.lon], {
+      icon: L.divIcon({className: 'rip-star', html: '★', iconSize: [20, 20], iconAnchor: [10, 10]}),
+      interactive: false, keyboard: false, zIndexOffset: 500,
+    }).addTo(mapL);
+  } else starMarker.setLatLng([loc.lat, loc.lon]);
 }
 function closeInspect() {
   state.inspect = null;
   if (popup) mapL.closePopup(popup);
   document.getElementById('ripMode').textContent = HOME.name;
   document.getElementById('ripReset').style.display = 'none';
+  updateStar();
   drawRip();
 }
 
@@ -685,6 +704,7 @@ async function init() {
     });
   }
   renderRoutes();
+  updateStar();
   function endEdit() {
     state.editing = null; editLayer.clearLayers(); editBar.style.display = 'none';
   }
@@ -712,7 +732,7 @@ async function init() {
     };
     ROUTES.push(r); saveRoutes(); renderRoutes(); endEdit(); selectRoute(r);
   });
-  mapL.on('popupclose', () => { if (state.inspect) closeInspect(); });
+
 
   document.getElementById('sources').innerHTML =
     `${META.sources.currents}<br>${META.sources.wind}<br>Generated ${META.generated}`;
