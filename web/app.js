@@ -3,13 +3,19 @@
    on Leaflet, with tap-to-inspect popup, per-location rip bar, threshold sliders. */
 
 /* ---------------- state & persisted thresholds ---------------- */
+const MPH2KT = 0.868976;
 const state = {
   t: 0, playing: false, inspect: null,
-  minWind: +(localStorage.getItem('tr_minWind') || 4),
+  minWindMph: +(localStorage.getItem('tr_minWindMph') || 5),
+  comfortMph: +(localStorage.getItem('tr_comfortMph') || 10),
   minCur: +(localStorage.getItem('tr_minCur') || 1.0),
   cone: +(localStorage.getItem('tr_cone') || 60),
   arrows: localStorage.getItem('tr_arrows') || 'wind',   // 'wind' | 'current' | 'off'
 };
+Object.defineProperty(state, 'minWind', {get() { return this.minWindMph * MPH2KT; }});   // kt
+Object.defineProperty(state, 'comfortKt', {get() { return this.comfortMph * MPH2KT; }}); // kt
+// the rip bar's home point when nothing is tapped
+const HOME = {name: 'Boundary Pass', lat: 48.713, lon: -123.232};
 let META = null, DATA = null;   // DATA: {mask:Uint8Array, hours:[{ws,wd,cu,cv}]}
 let mapL, heatOverlay, arrowLayer, popup;
 
@@ -95,6 +101,10 @@ function rampColor(s) {
   const c = stops[i].map((v, k) => Math.round(v + (stops[i + 1][k] - v) * f));
   return [c[0], c[1], c[2], Math.round(255 * (0.55 + 0.38 * n))];
 }
+function windColor(wk) {   // wind above comfort threshold, no (gated) opposition
+  const n = Math.max(0, Math.min(1, (wk - state.comfortKt) / Math.max(state.comfortKt, 1)));
+  return [122, 60, 165, Math.round(255 * (0.28 + 0.42 * n))];
+}
 function subColor(raw) {
   const lo = Math.max(1, state.minWind * state.minCur);
   const n = Math.max(0, Math.min(1, raw / lo));
@@ -164,8 +174,11 @@ function renderHeat(h) {
       if (v0 === v0) { const wgt = tx * ty; raw += v0 * wgt; wk += Fw[i11] * wgt; ck += Fc[i11] * wgt; wsum += wgt; }
       if (wsum < 0.05) continue;                     // all-land neighbourhood
       raw /= wsum; wk /= wsum; ck /= wsum;
-      if (raw < 0.3) continue;                       // effectively no opposition
-      const c = (wk >= state.minWind && ck >= state.minCur) ? rampColor(raw) : subColor(raw);
+      let c;
+      if (raw >= 0.3 && wk >= state.minWind && ck >= state.minCur) c = rampColor(raw);
+      else if (wk >= state.comfortKt) c = windColor(wk);           // rough even without opposition
+      else if (raw >= 0.3) c = subColor(raw);
+      else continue;
       const o = rowOff + x * 4;
       px[o] = c[0]; px[o + 1] = c[1]; px[o + 2] = c[2]; px[o + 3] = c[3];
     }
@@ -253,7 +266,7 @@ function popupHtml(lat, lon) {
   else if (r.raw > 0) { cls = 'sub'; txt = 'Opposed, below your thresholds'; }
   return `<span class="mono" style="color:var(--ink-soft)">${lat.toFixed(3)}, ${lon.toFixed(3)}</span>
     <table class="pop-table">
-      <tr><td>Wind</td><td class="mono">${r.wkt.toFixed(1)} kt from ${compass(r.wfrom)}</td></tr>
+      <tr><td>Wind</td><td class="mono">${r.wkt.toFixed(1)} kt (${(r.wkt / MPH2KT).toFixed(0)} mph) from ${compass(r.wfrom)}</td></tr>
       <tr><td>Current</td><td class="mono">${r.ckt.toFixed(1)} kt toward ${compass(r.cdir)}</td></tr>
       <tr><td>Opposition angle</td><td class="mono">${r.align.toFixed(0)}°</td></tr>
       <tr><td><b>Opposition score</b></td><td class="mono"><b>${r.raw > 0 ? r.raw.toFixed(1) : '0'}</b></td></tr>
@@ -271,35 +284,24 @@ function openInspect(lat, lon) {
 function closeInspect() {
   state.inspect = null;
   if (popup) mapL.closePopup(popup);
-  document.getElementById('ripMode').textContent = 'region worst';
+  document.getElementById('ripMode').textContent = HOME.name;
   document.getElementById('ripReset').style.display = 'none';
   drawRip();
 }
 
 /* ---------------- rip bar ---------------- */
 const rip = document.getElementById('ripbar'), rctx = rip.getContext('2d');
-let regionMaxCache = null;   // invalidated when thresholds change
-function regionMax(h) {
-  if (!regionMaxCache) regionMaxCache = new Array(META.hours.length).fill(null);
-  if (regionMaxCache[h] !== null) return regionMaxCache[h];
-  const g = META.grid; let m = 0;
-  for (let i = 0; i < g.nx * g.ny; i += 3) {         // stride 3: plenty for a max
-    const s = scoreCell(i, h);
-    if (s !== 0x7fffffff && s > m) m = s;
-  }
-  return (regionMaxCache[h] = m);
-}
 function drawRip() {
   const wrap = rip.parentElement.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
   rip.width = wrap.width * dpr; rip.height = wrap.height * dpr;
   rctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const w = wrap.width, hgt = wrap.height, H = META.hours.length, seg = w / H;
   rctx.clearRect(0, 0, w, hgt);
-  const loc = state.inspect;
+  const loc = state.inspect || HOME;
   const bars = [];
   for (let h = 0; h < H; h++) {
-    if (loc) { const q = scoreAt(loc.lat, loc.lon, h); bars.push(q && q.water ? {v: q.raw, g: q.s > 0} : {v: 0, g: false}); }
-    else bars.push({v: regionMax(h), g: true});
+    const q = scoreAt(loc.lat, loc.lon, h);
+    bars.push(q && q.water ? {v: q.raw, g: q.s > 0} : {v: 0, g: false});
   }
   const top = Math.max(30, ...bars.map(b => b.v));
   for (let h = 0; h < H; h++) {
@@ -419,11 +421,11 @@ async function init() {
       state[key] = parseFloat(el.value);
       localStorage.setItem('tr_' + key, el.value);
       document.getElementById(out).textContent = fmt(el.value);
-      regionMaxCache = null;
       refreshAll();
     });
   };
-  bind('minWind', 'minWindOut', 'minWind', v => `${v} kt`);
+  bind('minWind', 'minWindOut', 'minWindMph', v => `${v} mph`);
+  bind('comfort', 'comfortOut', 'comfortMph', v => `${v} mph`);
   bind('minCur', 'minCurOut', 'minCur', v => `${(+v).toFixed(1)} kt`);
   bind('cone', 'coneOut', 'cone', v => `±${v}°`);
   document.getElementById('panelHead').addEventListener('click', () => {
