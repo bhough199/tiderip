@@ -29,7 +29,11 @@ STATION_LISTS = [
     f"{C.DATAMART}/today/observations/doc/swob-xml_marine_station_list.csv",
     f"{C.DATAMART}/today/observations/doc/swob-xml_station_list.csv",
 ]
-MAX_ECCC = 10
+MAX_ECCC = 50
+# stations matching these names are fetched first (before the cap) and their
+# failures are logged verbosely
+PRIORITY = ("kelp", "race rocks", "saturna", "entrance", "sand heads",
+            "discovery", "trial", "victoria int")
 MS_TO_KT = 1.9438445
 
 
@@ -99,15 +103,28 @@ def _discover_eccc():
 
 
 def _swob(name, sid, lat, lon):
-    r = requests.get(f"{SWOB_LATEST}/{sid}-AUTO-swob.xml", timeout=30)
-    r.raise_for_status()
-    txt = r.text
+    txt = None
+    for suffix in ("AUTO", "AUTO-minute", "MAN"):
+        try:
+            r = requests.get(f"{SWOB_LATEST}/{sid}-{suffix}-swob.xml", timeout=30)
+            if r.status_code == 200:
+                txt = r.text
+                break
+        except requests.RequestException:
+            continue
+    if txt is None:
+        raise RuntimeError("no latest swob file found (AUTO/AUTO-minute/MAN)")
 
     def grab(pattern):
-        m = re.search(
-            rf'name="{pattern}[^"]*"\s+uom="([^"]+)"\s+value="([-\d.]+)"', txt
-        )
-        return (m.group(1), float(m.group(2))) if m else (None, None)
+        # attribute order inside the tag varies between stations, so find the
+        # element tag first, then pull uom/value from anywhere within it
+        m = re.search(rf'<element[^>]*name="{pattern}[^"]*"[^>]*>', txt)
+        if not m:
+            return (None, None)
+        tag = m.group(0)
+        u = re.search(r'uom="([^"]*)"', tag)
+        v = re.search(r'value="(-?[\d.]+)"', tag)
+        return (u.group(1) if u else None, float(v.group(1)) if v else None)
 
     uom, spd = grab("avg_wnd_spd_10m_pst")
     if spd is None:
@@ -137,8 +154,11 @@ def fetch_obs():
                 out.append(st)
         except Exception as e:  # noqa: BLE001 - never fatal
             print(f"obs: {name} ({sid}) skipped: {e}")
+    stations = _discover_eccc()
+    is_pri = lambda n: any(p in n.lower() for p in PRIORITY)
+    stations.sort(key=lambda s: 0 if is_pri(s[0]) else 1)
     n_eccc = 0
-    for name, sid, lat, lon in _discover_eccc():
+    for name, sid, lat, lon in stations:
         if n_eccc >= MAX_ECCC:
             break
         try:
@@ -146,7 +166,10 @@ def fetch_obs():
             if st:
                 out.append(st)
                 n_eccc += 1
-        except Exception:  # noqa: BLE001 - many listed stations have no latest file
-            pass
+            elif is_pri(name):
+                print(f"obs: {name} ({sid}) had a latest file but no parsable wind")
+        except Exception as e:  # noqa: BLE001 - many listed stations have no latest file
+            if is_pri(name):
+                print(f"obs: {name} ({sid}) skipped: {e}")
     print(f"obs: {len(out)} stations reporting")
     return out
