@@ -279,7 +279,7 @@
 
         <h3>Plan a trip</h3>
         <p>In settings → Routes, set your cruise speed and travel window, then tap
-        waypoints on the map and save. With a route selected, each rip-bar hour
+        waypoints on the map and save (speed and window are captured when you save). With a route selected, each rip-bar hour
         becomes a possible departure time: green = clear run, warm = wind-against-
         current somewhere en route, blue = wind over your comfort, grey = outside
         your window or the forecast. Scrub to a departure hour and the route
@@ -291,6 +291,9 @@
         warning banner appears if it's stale. Model currents in narrow passes are
         often right on timing and wrong on strength — keep the official tables for
         pass transits.</p>
+
+        <h3>Data</h3>
+        <div id="sources" style="font-size:11px; color:var(--ink-soft); line-height:1.45"></div>
       </div>
     </div>
   </div>
@@ -327,12 +330,6 @@
           <span><input id="rtStart" type="number" min="0" max="23" value="6" class="numin">&ndash;<input id="rtEnd" type="number" min="1" max="24" value="19" class="numin"></span>
           <span class="mono" style="width:58px;text-align:right">h</span></div>
         <button id="newRoute" class="pass-row" style="font-weight:700">+ New route</button>
-        <div style="font-size:10.5px; color:var(--ink-soft); margin-top:4px; line-height:1.35">
-          Speed &amp; window are captured when you save a route. With a route selected,
-          each rip-bar hour is a <b>departure time</b>: green = clear run, blue = wind
-          over comfort en route, warm = wind-against-current en route. Grey dashes =
-          outside your travel window or past the forecast.
-        </div>
       </section>
       <section>
         <h2>Your thresholds</h2>
@@ -346,18 +343,6 @@
         <div class="legend-bar"></div>
         <div class="legend-ticks mono"><span id="lgMin">8</span><span>·</span><span id="lgMid">19</span><span>·</span><span id="lgMax">30+</span></div>
         <div class="legend-note">Score = wind (kt) × current (kt) × alignment. Warm: your thresholds met. Cobalt blue: wind above your comfort max, even without opposing current. Faint grey-teal: opposed but below thresholds. On the rip bar, the teal curve is current speed — circles mark slack, peaks are max ebb/flood.</div>
-      </section>
-      <section>
-        <h2>How to inspect</h2>
-        <div style="font-size:11.5px; color:var(--ink-soft); line-height:1.4">
-          Tap any point on the water to see the wind, current, and opposition
-          score there. The rip bar switches to that spot's forecast until you
-          tap ✕ next to it.
-        </div>
-      </section>
-      <section>
-        <h2>Data</h2>
-        <div id="sources"></div>
       </section>
     </div>
   </div>
