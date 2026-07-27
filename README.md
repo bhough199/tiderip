@@ -54,8 +54,11 @@ signal.
 4. Open `https://<your-username>.github.io/<repo-name>/` on your phone and use
    **Add to Home Screen** to install it like an app.
 
-After that, the workflow runs itself every 6 hours (~5:23 / 11:23 AM & PM
-Pacific in summer; GitHub's scheduler can add delays). No servers, no accounts
+After that, the workflow runs itself four times a day, timed to catch each
+fresh HRDPS wind run shortly after it publishes (04:40/10:40/16:40/22:40 UTC =
+~9:40 PM, 3:40 AM, 9:40 AM, 3:40 PM Pacific in summer; GitHub's scheduler can
+add delays). SalishSeaCast currents update twice daily and are picked up by
+whichever build follows. No servers, no accounts
 beyond GitHub, no cost. Note: GitHub disables scheduled workflows after 60 days
 without repo activity — one click in the Actions tab re-enables.
 
